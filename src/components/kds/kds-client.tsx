@@ -20,15 +20,15 @@ const estadoNext = {
 } as const
 
 const estadoColor: Record<string, string> = {
-  pendiente: 'bg-yellow-900/40 border-yellow-700',
-  preparando: 'bg-blue-900/40 border-blue-700',
-  listo: 'bg-emerald-900/40 border-emerald-700',
+  pendiente: 'bg-yellow-500/20 border-yellow-500',
+  preparando: 'bg-blue-500/20 border-blue-500',
+  listo: 'bg-emerald-500/20 border-emerald-500',
 }
 
 const estadoBadge: Record<string, string> = {
-  pendiente: 'bg-yellow-500/20 text-yellow-300',
-  preparando: 'bg-blue-500/20 text-blue-300',
-  listo: 'bg-emerald-500/20 text-emerald-300',
+  pendiente: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300',
+  preparando: 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
+  listo: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300',
 }
 
 export function KdsClient({ pedidosIniciales, tenantId }: Props) {
@@ -86,7 +86,7 @@ export function KdsClient({ pedidosIniciales, tenantId }: Props) {
 
   if (pedidos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500">
+      <div className="flex flex-col items-center justify-center h-[60vh] text-muted-foreground">
         <span className="text-6xl mb-4">🍳</span>
         <p className="text-xl">Sin pedidos pendientes</p>
         <p className="text-sm mt-1">Los nuevos pedidos aparecerán aquí en tiempo real</p>
@@ -97,8 +97,8 @@ export function KdsClient({ pedidosIniciales, tenantId }: Props) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-white text-2xl font-bold">Cocina</h1>
-        <Badge className="bg-slate-700 text-slate-300">{pedidos.length} pedidos activos</Badge>
+        <h1 className="text-foreground text-2xl font-bold">Cocina</h1>
+        <Badge variant="secondary">{pedidos.length} pedidos activos</Badge>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -117,7 +117,7 @@ export function KdsClient({ pedidosIniciales, tenantId }: Props) {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-bold text-lg">
+                    <span className="text-foreground font-bold text-lg">
                       {pedido.mesa
                         ? `Mesa ${pedido.mesa.numero}`
                         : pedido.tipo === 'llevar'
@@ -128,7 +128,7 @@ export function KdsClient({ pedidosIniciales, tenantId }: Props) {
                       {estado.charAt(0).toUpperCase() + estado.slice(1)}
                     </span>
                   </div>
-                  <p className={`text-xs mt-0.5 ${esUrgente ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
+                  <p className={`text-xs mt-0.5 ${esUrgente ? 'text-red-600 dark:text-red-400 font-bold' : 'text-muted-foreground'}`}>
                     {esUrgente ? '⚠️ ' : ''}
                     {minutosTranscurridos}min · {format(new Date(pedido.created_at), 'HH:mm', { locale: es })}
                   </p>
@@ -146,16 +146,16 @@ export function KdsClient({ pedidosIniciales, tenantId }: Props) {
                           avanzarItem.mutate({ itemId: item.id, estado: isListo ? 'pendiente' : 'listo' })
                         }
                         className={`w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${
-                          isListo ? 'bg-emerald-500 border-emerald-400' : 'border-slate-500 hover:border-white'
+                          isListo ? 'bg-emerald-500 border-emerald-400' : 'border-border hover:border-foreground'
                         }`}
                       >
                         {isListo && <span className="text-white text-xs">✓</span>}
                       </button>
-                      <span className={`text-sm ${isListo ? 'line-through text-slate-500' : 'text-white'}`}>
+                      <span className={`text-sm ${isListo ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                         <span className="font-bold">{item.cantidad}×</span> {item.producto?.nombre}
                       </span>
                       {item.notas && (
-                        <span className="text-yellow-400 text-xs ml-auto shrink-0">📝 {item.notas}</span>
+                        <span className="text-yellow-600 dark:text-yellow-400 text-xs ml-auto shrink-0">📝 {item.notas}</span>
                       )}
                     </li>
                   )
@@ -176,7 +176,7 @@ export function KdsClient({ pedidosIniciales, tenantId }: Props) {
                 </button>
               )}
               {estado === 'listo' && (
-                <div className="text-center text-emerald-400 text-sm font-semibold">
+                <div className="text-center text-emerald-600 dark:text-emerald-400 text-sm font-semibold">
                   ✓ Listo para entregar
                 </div>
               )}

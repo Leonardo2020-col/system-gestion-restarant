@@ -31,7 +31,6 @@ export function RegisterForm() {
   })
 
   async function onSubmit(data: FormData) {
-    // 1. Crear usuario en Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
@@ -41,7 +40,6 @@ export function RegisterForm() {
       return
     }
 
-    // 2. Crear tenant
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
       .insert({ nombre: data.nombreRestaurante, slug: data.slug, ruc: data.ruc })
@@ -52,7 +50,6 @@ export function RegisterForm() {
       return
     }
 
-    // 3. Crear registro de usuario con rol admin
     const { error: userError } = await supabase.from('usuarios').insert({
       id: authData.user.id,
       tenant_id: tenant.id,
@@ -70,62 +67,40 @@ export function RegisterForm() {
   }
 
   return (
-    <Card className="bg-slate-900 border-slate-800">
+    <Card>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1">
-              <Label className="text-slate-300">Nombre del restaurante</Label>
-              <Input
-                className="bg-slate-800 border-slate-700 text-white"
-                {...register('nombreRestaurante')}
-              />
+              <Label>Nombre del restaurante</Label>
+              <Input {...register('nombreRestaurante')} />
               {errors.nombreRestaurante && (
-                <p className="text-red-400 text-xs">{errors.nombreRestaurante.message}</p>
+                <p className="text-red-500 text-xs">{errors.nombreRestaurante.message}</p>
               )}
             </div>
             <div className="space-y-1">
-              <Label className="text-slate-300">RUC</Label>
-              <Input
-                maxLength={11}
-                className="bg-slate-800 border-slate-700 text-white"
-                {...register('ruc')}
-              />
-              {errors.ruc && <p className="text-red-400 text-xs">{errors.ruc.message}</p>}
+              <Label>RUC</Label>
+              <Input maxLength={11} {...register('ruc')} />
+              {errors.ruc && <p className="text-red-500 text-xs">{errors.ruc.message}</p>}
             </div>
             <div className="space-y-1">
-              <Label className="text-slate-300">URL del menú (slug)</Label>
-              <Input
-                placeholder="mi-restaurante"
-                className="bg-slate-800 border-slate-700 text-white"
-                {...register('slug')}
-              />
-              {errors.slug && <p className="text-red-400 text-xs">{errors.slug.message}</p>}
+              <Label>URL del menú (slug)</Label>
+              <Input placeholder="mi-restaurante" {...register('slug')} />
+              {errors.slug && <p className="text-red-500 text-xs">{errors.slug.message}</p>}
             </div>
             <div className="col-span-2 space-y-1">
-              <Label className="text-slate-300">Tu nombre</Label>
-              <Input
-                className="bg-slate-800 border-slate-700 text-white"
-                {...register('nombreAdmin')}
-              />
+              <Label>Tu nombre</Label>
+              <Input {...register('nombreAdmin')} />
             </div>
             <div className="col-span-2 space-y-1">
-              <Label className="text-slate-300">Email</Label>
-              <Input
-                type="email"
-                className="bg-slate-800 border-slate-700 text-white"
-                {...register('email')}
-              />
-              {errors.email && <p className="text-red-400 text-xs">{errors.email.message}</p>}
+              <Label>Email</Label>
+              <Input type="email" {...register('email')} />
+              {errors.email && <p className="text-red-500 text-xs">{errors.email.message}</p>}
             </div>
             <div className="col-span-2 space-y-1">
-              <Label className="text-slate-300">Contraseña</Label>
-              <Input
-                type="password"
-                className="bg-slate-800 border-slate-700 text-white"
-                {...register('password')}
-              />
-              {errors.password && <p className="text-red-400 text-xs">{errors.password.message}</p>}
+              <Label>Contraseña</Label>
+              <Input type="password" {...register('password')} />
+              {errors.password && <p className="text-red-500 text-xs">{errors.password.message}</p>}
             </div>
           </div>
         </CardContent>
@@ -133,9 +108,9 @@ export function RegisterForm() {
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? 'Registrando...' : 'Crear restaurante'}
           </Button>
-          <p className="text-slate-500 text-xs text-center">
+          <p className="text-muted-foreground text-xs text-center">
             ¿Ya tienes cuenta?{' '}
-            <a href="/login" className="text-slate-300 hover:text-white underline">
+            <a href="/login" className="text-foreground hover:underline">
               Ingresar
             </a>
           </p>

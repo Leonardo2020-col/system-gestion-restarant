@@ -28,14 +28,16 @@ export function ProductGrid({ categorias, productos }: Props) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Buscar producto..."
-        className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white placeholder:text-slate-500 text-sm"
+        className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
       />
 
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setCatId(null)}
           className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-            catId === null ? 'bg-white text-slate-900' : 'bg-slate-800 text-slate-400 hover:text-white'
+            catId === null
+              ? 'bg-foreground text-background'
+              : 'bg-muted text-muted-foreground hover:text-foreground'
           }`}
         >
           Todos
@@ -45,7 +47,9 @@ export function ProductGrid({ categorias, productos }: Props) {
             key={cat.id}
             onClick={() => setCatId(cat.id)}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              catId === cat.id ? 'bg-white text-slate-900' : 'bg-slate-800 text-slate-400 hover:text-white'
+              catId === cat.id
+                ? 'bg-foreground text-background'
+                : 'bg-muted text-muted-foreground hover:text-foreground'
             }`}
           >
             {cat.nombre}
@@ -59,7 +63,7 @@ export function ProductGrid({ categorias, productos }: Props) {
             <button
               key={producto.id}
               onClick={() => addItem({ id: producto.id, nombre: producto.nombre, precio_salon: producto.precio_salon })}
-              className="flex flex-col bg-slate-800 hover:bg-slate-700 rounded-xl p-3 text-left transition-colors border border-slate-700 hover:border-slate-600"
+              className="flex flex-col bg-card hover:bg-muted rounded-xl p-3 text-left transition-colors border border-border hover:border-border"
             >
               {producto.imagen_url ? (
                 <img
@@ -68,16 +72,16 @@ export function ProductGrid({ categorias, productos }: Props) {
                   className="w-full aspect-square object-cover rounded-lg mb-2"
                 />
               ) : (
-                <div className="w-full aspect-square rounded-lg bg-slate-700 flex items-center justify-center mb-2 text-2xl">
+                <div className="w-full aspect-square rounded-lg bg-muted flex items-center justify-center mb-2 text-2xl">
                   🍽️
                 </div>
               )}
-              <span className="text-white text-sm font-medium leading-tight">{producto.nombre}</span>
-              <span className="text-emerald-400 text-sm font-bold mt-1">
+              <span className="text-foreground text-sm font-medium leading-tight">{producto.nombre}</span>
+              <span className="text-emerald-600 dark:text-emerald-400 text-sm font-bold mt-1">
                 S/ {producto.precio_salon.toFixed(2)}
               </span>
               {producto.categoria && (
-                <Badge variant="outline" className="mt-1 text-xs border-slate-600 text-slate-400 w-fit">
+                <Badge variant="outline" className="mt-1 text-xs w-fit">
                   {producto.categoria.nombre}
                 </Badge>
               )}
@@ -85,7 +89,7 @@ export function ProductGrid({ categorias, productos }: Props) {
           ))}
         </div>
         {filtered.length === 0 && (
-          <div className="text-slate-500 text-center py-12">Sin productos</div>
+          <div className="text-muted-foreground text-center py-12">Sin productos</div>
         )}
       </div>
     </div>

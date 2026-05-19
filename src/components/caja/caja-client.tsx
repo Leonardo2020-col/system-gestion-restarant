@@ -97,22 +97,21 @@ export function CajaClient({ cajaActiva, tenantId, usuarioId }: Props) {
   if (!caja) {
     return (
       <div className="max-w-md mx-auto mt-12">
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-white">Abrir Caja</CardTitle>
+            <CardTitle>Abrir Caja</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={aperturaForm.handleSubmit(abrir)} className="space-y-4">
               <div className="space-y-1">
-                <Label className="text-slate-300">Monto de apertura (S/)</Label>
+                <Label>Monto de apertura (S/)</Label>
                 <Input
                   type="number"
                   step="0.01"
-                  className="bg-slate-800 border-slate-700 text-white"
                   {...aperturaForm.register('monto', { valueAsNumber: true })}
                 />
                 {aperturaForm.formState.errors.monto && (
-                  <p className="text-red-400 text-xs">{aperturaForm.formState.errors.monto.message}</p>
+                  <p className="text-red-500 text-xs">{aperturaForm.formState.errors.monto.message}</p>
                 )}
               </div>
               <Button type="submit" className="w-full" disabled={aperturaForm.formState.isSubmitting}>
@@ -134,8 +133,8 @@ export function CajaClient({ cajaActiva, tenantId, usuarioId }: Props) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-white text-2xl font-bold">Caja</h1>
-          <p className="text-slate-400 text-sm">
+          <h1 className="text-foreground text-2xl font-bold">Caja</h1>
+          <p className="text-muted-foreground text-sm">
             Abierta {format(new Date(caja.abierta_at), "dd MMM HH:mm", { locale: es })} por{' '}
             {caja.usuario?.nombre ?? 'desconocido'}
           </p>
@@ -146,14 +145,14 @@ export function CajaClient({ cajaActiva, tenantId, usuarioId }: Props) {
       {/* Resumen */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Apertura', value: caja.monto_apertura, color: 'text-slate-300' },
-          { label: 'Ingresos', value: ingresos, color: 'text-emerald-400' },
-          { label: 'Egresos', value: egresos, color: 'text-red-400' },
-          { label: 'Saldo actual', value: saldoActual, color: 'text-white font-bold' },
+          { label: 'Apertura', value: caja.monto_apertura, color: 'text-foreground' },
+          { label: 'Ingresos', value: ingresos, color: 'text-emerald-600 dark:text-emerald-400' },
+          { label: 'Egresos', value: egresos, color: 'text-red-600 dark:text-red-400' },
+          { label: 'Saldo actual', value: saldoActual, color: 'text-foreground font-bold' },
         ].map((item) => (
-          <Card key={item.label} className="bg-slate-900 border-slate-800">
+          <Card key={item.label}>
             <CardContent className="pt-4">
-              <p className="text-slate-400 text-xs">{item.label}</p>
+              <p className="text-muted-foreground text-xs">{item.label}</p>
               <p className={`text-xl ${item.color}`}>S/ {item.value.toFixed(2)}</p>
             </CardContent>
           </Card>
@@ -162,9 +161,9 @@ export function CajaClient({ cajaActiva, tenantId, usuarioId }: Props) {
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Registrar movimiento */}
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-white text-base">Registrar movimiento</CardTitle>
+            <CardTitle className="text-base">Registrar movimiento</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={movForm.handleSubmit(registrarMovimiento)} className="space-y-3">
@@ -177,9 +176,9 @@ export function CajaClient({ cajaActiva, tenantId, usuarioId }: Props) {
                     className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                       movForm.watch('tipo') === t
                         ? t === 'ingreso'
-                          ? 'bg-emerald-700 text-white'
-                          : 'bg-red-800 text-white'
-                        : 'bg-slate-800 text-slate-400'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-red-600 text-white'
+                        : 'bg-muted text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {t === 'ingreso' ? '+ Ingreso' : '− Egreso'}
@@ -187,23 +186,21 @@ export function CajaClient({ cajaActiva, tenantId, usuarioId }: Props) {
                 ))}
               </div>
               <div className="space-y-1">
-                <Label className="text-slate-300">Monto (S/)</Label>
+                <Label>Monto (S/)</Label>
                 <Input
                   type="number"
                   step="0.01"
-                  className="bg-slate-800 border-slate-700 text-white"
                   {...movForm.register('monto', { valueAsNumber: true })}
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-slate-300">Concepto</Label>
+                <Label>Concepto</Label>
                 <Input
                   placeholder="Ej: Pago efectivo mesa 3"
-                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
                   {...movForm.register('concepto')}
                 />
                 {movForm.formState.errors.concepto && (
-                  <p className="text-red-400 text-xs">{movForm.formState.errors.concepto.message}</p>
+                  <p className="text-red-500 text-xs">{movForm.formState.errors.concepto.message}</p>
                 )}
               </div>
               <Button type="submit" className="w-full" disabled={movForm.formState.isSubmitting}>
@@ -214,27 +211,30 @@ export function CajaClient({ cajaActiva, tenantId, usuarioId }: Props) {
         </Card>
 
         {/* Historial de movimientos */}
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-white text-base">
+            <CardTitle className="text-base">
               Movimientos ({movimientos.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {movimientos.length === 0 ? (
-                <p className="text-slate-500 text-sm text-center py-4">Sin movimientos</p>
+                <p className="text-muted-foreground text-sm text-center py-4">Sin movimientos</p>
               ) : (
                 [...movimientos].reverse().map((mov) => (
-                  <div key={mov.id} className="flex items-center justify-between py-1.5 border-b border-slate-800 last:border-0">
+                  <div key={mov.id} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
                     <div>
-                      <p className="text-white text-sm">{mov.concepto}</p>
-                      <p className="text-slate-500 text-xs">
+                      <p className="text-foreground text-sm">{mov.concepto}</p>
+                      <p className="text-muted-foreground text-xs">
                         {format(new Date(mov.created_at), 'HH:mm', { locale: es })}
                       </p>
                     </div>
                     <Badge
-                      className={`ml-3 ${mov.tipo === 'ingreso' ? 'bg-emerald-900/50 text-emerald-300' : 'bg-red-900/50 text-red-300'}`}
+                      className={`ml-3 ${mov.tipo === 'ingreso'
+                        ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500'
+                        : 'bg-red-500/20 text-red-700 dark:text-red-300 border border-red-500'
+                      }`}
                     >
                       {mov.tipo === 'ingreso' ? '+' : '−'} S/ {mov.monto.toFixed(2)}
                     </Badge>

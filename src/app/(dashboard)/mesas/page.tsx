@@ -5,9 +5,9 @@ import { cn } from '@/lib/utils'
 import type { Usuario } from '@/types/supabase'
 
 const estadoColors = {
-  libre: 'bg-emerald-900/40 border-emerald-700 text-emerald-300',
-  ocupada: 'bg-orange-900/40 border-orange-700 text-orange-300',
-  reservada: 'bg-blue-900/40 border-blue-700 text-blue-300',
+  libre: 'bg-emerald-500/20 border-emerald-500 text-emerald-700 dark:text-emerald-300',
+  ocupada: 'bg-orange-500/20 border-orange-500 text-orange-700 dark:text-orange-300',
+  reservada: 'bg-blue-500/20 border-blue-500 text-blue-700 dark:text-blue-300',
 }
 
 export default async function MesasPage() {
@@ -28,10 +28,10 @@ export default async function MesasPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-white text-2xl font-bold">Mesas</h1>
+        <h1 className="text-foreground text-2xl font-bold">Mesas</h1>
         <div className="flex gap-3">
-          <Badge className="bg-emerald-900/50 text-emerald-300">{libres} libres</Badge>
-          <Badge className="bg-orange-900/50 text-orange-300">{ocupadas} ocupadas</Badge>
+          <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500">{libres} libres</Badge>
+          <Badge className="bg-orange-500/20 text-orange-700 dark:text-orange-300 border border-orange-500">{ocupadas} ocupadas</Badge>
         </div>
       </div>
 
@@ -39,7 +39,7 @@ export default async function MesasPage() {
         const mesasSalon = mesas.filter((m) => m.salon_id === salon.id)
         return (
           <div key={salon.id}>
-            <h3 className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">
+            <h3 className="text-muted-foreground text-xs font-semibold uppercase tracking-wider mb-3">
               {salon.nombre}
             </h3>
             <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 gap-3">
@@ -51,7 +51,7 @@ export default async function MesasPage() {
                     estadoColors[mesa.estado]
                   )}
                 >
-                  <span className="text-white font-bold text-xl">{mesa.numero}</span>
+                  <span className="font-bold text-xl">{mesa.numero}</span>
                   <span className="text-xs capitalize">{mesa.estado}</span>
                 </div>
               ))}

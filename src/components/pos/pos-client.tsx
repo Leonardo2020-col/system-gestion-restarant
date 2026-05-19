@@ -74,8 +74,8 @@ export function PosClient({ mesas, salones, categorias, productos, tenantId, usu
             onClick={() => setView('mesas')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               view === 'mesas'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
             Mesas {mesaId && `(Mesa ${mesas.find((m) => m.id === mesaId)?.numero ?? ''})`}
@@ -84,8 +84,8 @@ export function PosClient({ mesas, salones, categorias, productos, tenantId, usu
             onClick={() => setView('productos')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               view === 'productos'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
             Productos

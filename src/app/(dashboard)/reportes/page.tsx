@@ -39,7 +39,7 @@ export default async function ReportesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-white text-2xl font-bold">Reportes</h1>
+      <h1 className="text-foreground text-2xl font-bold">Reportes</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -48,17 +48,17 @@ export default async function ReportesPage() {
           { label: 'Ticket promedio', value: `S/ ${ticketPromedio.toFixed(2)}`, sub: 'Este mes' },
           { label: 'Pedidos entregados', value: String(pedidosMes.length), sub: 'Este mes' },
         ].map((item) => (
-          <Card key={item.label} className="bg-slate-900 border-slate-800">
+          <Card key={item.label}>
             <CardContent className="pt-5 pb-4">
-              <p className="text-slate-400 text-xs mb-1">{item.label}</p>
-              <p className="text-white text-2xl font-bold">{item.value}</p>
-              <p className="text-slate-500 text-xs mt-1">{item.sub}</p>
+              <p className="text-muted-foreground text-xs mb-1">{item.label}</p>
+              <p className="text-foreground text-2xl font-bold">{item.value}</p>
+              <p className="text-muted-foreground text-xs mt-1">{item.sub}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="text-slate-500 text-center py-12 bg-slate-900/50 rounded-xl border border-slate-800">
+      <div className="text-muted-foreground text-center py-12 bg-muted/50 rounded-xl border border-border">
         <p className="text-3xl mb-3">📊</p>
         <p>Gráficos y exportación CSV disponibles en la Fase 2</p>
       </div>

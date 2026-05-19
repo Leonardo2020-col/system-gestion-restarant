@@ -11,9 +11,9 @@ type Props = {
 }
 
 const estadoColors = {
-  libre: 'bg-emerald-900/40 border-emerald-700 hover:bg-emerald-800/50',
-  ocupada: 'bg-orange-900/40 border-orange-700 hover:bg-orange-800/50',
-  reservada: 'bg-blue-900/40 border-blue-700 hover:bg-blue-800/50',
+  libre: 'bg-emerald-500/20 border-emerald-500 hover:bg-emerald-500/30',
+  ocupada: 'bg-orange-500/20 border-orange-500 hover:bg-orange-500/30',
+  reservada: 'bg-blue-500/20 border-blue-500 hover:bg-blue-500/30',
 }
 
 const estadoLabel = {
@@ -29,7 +29,7 @@ export function MesaGrid({ mesas, salones, selectedId, onSelect }: Props) {
         const mesasSalon = mesas.filter((m) => m.salon_id === salon.id)
         return (
           <div key={salon.id}>
-            <h3 className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">
+            <h3 className="text-muted-foreground text-xs font-semibold uppercase tracking-wider mb-3">
               {salon.nombre}
             </h3>
             <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
@@ -40,11 +40,11 @@ export function MesaGrid({ mesas, salones, selectedId, onSelect }: Props) {
                   className={cn(
                     'relative aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all',
                     estadoColors[mesa.estado],
-                    selectedId === mesa.id && 'ring-2 ring-white ring-offset-2 ring-offset-slate-950'
+                    selectedId === mesa.id && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
                   )}
                 >
-                  <span className="text-white font-bold text-xl">{mesa.numero}</span>
-                  <span className="text-xs text-slate-300">{estadoLabel[mesa.estado]}</span>
+                  <span className="text-foreground font-bold text-xl">{mesa.numero}</span>
+                  <span className="text-xs text-muted-foreground">{estadoLabel[mesa.estado]}</span>
                 </button>
               ))}
             </div>
@@ -52,7 +52,7 @@ export function MesaGrid({ mesas, salones, selectedId, onSelect }: Props) {
         )
       })}
       {mesas.length === 0 && (
-        <div className="text-slate-500 text-center py-12">
+        <div className="text-muted-foreground text-center py-12">
           No hay mesas configuradas. Ve a Ajustes para agregar mesas.
         </div>
       )}

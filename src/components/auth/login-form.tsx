@@ -37,36 +37,34 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="bg-slate-900 border-slate-800">
+    <Card>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-1">
-            <Label className="text-slate-300">Email</Label>
+            <Label>Email</Label>
             <Input
               type="email"
               placeholder="admin@restaurante.com"
-              className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
               {...register('email')}
             />
-            {errors.email && <p className="text-red-400 text-xs">{errors.email.message}</p>}
+            {errors.email && <p className="text-red-500 text-xs">{errors.email.message}</p>}
           </div>
           <div className="space-y-1">
-            <Label className="text-slate-300">Contraseña</Label>
+            <Label>Contraseña</Label>
             <Input
               type="password"
-              className="bg-slate-800 border-slate-700 text-white"
               {...register('password')}
             />
-            {errors.password && <p className="text-red-400 text-xs">{errors.password.message}</p>}
+            {errors.password && <p className="text-red-500 text-xs">{errors.password.message}</p>}
           </div>
         </CardContent>
         <CardFooter className="flex-col gap-3 pb-6">
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? 'Ingresando...' : 'Ingresar'}
           </Button>
-          <p className="text-slate-500 text-xs text-center">
+          <p className="text-muted-foreground text-xs text-center">
             ¿Sin cuenta?{' '}
-            <a href="/register" className="text-slate-300 hover:text-white underline">
+            <a href="/register" className="text-foreground hover:underline">
               Registra tu restaurante
             </a>
           </p>
