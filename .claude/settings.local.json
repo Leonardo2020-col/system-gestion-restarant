@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__0cfb0042-0978-4744-94d1-fb2afd4b6c85__get_publishable_keys"
+    ]
+  }
+}
