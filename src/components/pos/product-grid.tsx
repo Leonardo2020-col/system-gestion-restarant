@@ -78,7 +78,7 @@ export function ProductGrid({ categorias, productos }: Props) {
               )}
               <span className="text-foreground text-sm font-medium leading-tight">{producto.nombre}</span>
               <span className="text-emerald-600 dark:text-emerald-400 text-sm font-bold mt-1">
-                S/ {producto.precio_salon.toFixed(2)}
+                S/ {Number(producto.precio_salon).toFixed(2)}
               </span>
               {producto.categoria && (
                 <Badge variant="outline" className="mt-1 text-xs w-fit">

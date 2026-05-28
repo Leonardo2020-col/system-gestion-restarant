@@ -173,8 +173,8 @@ export function CartaClient({ categorias: initCats, productos: initProds, tenant
                               <p className="text-foreground font-medium text-sm truncate">{p.nombre}</p>
                               {p.descripcion && <p className="text-muted-foreground text-xs mt-0.5 line-clamp-1">{p.descripcion}</p>}
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="text-emerald-600 dark:text-emerald-400 font-bold text-sm">S/ {p.precio_salon.toFixed(2)}</span>
-                                {p.precio_llevar && <span className="text-muted-foreground text-xs">Llevar: S/ {p.precio_llevar.toFixed(2)}</span>}
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold text-sm">S/ {Number(p.precio_salon).toFixed(2)}</span>
+                                {p.precio_llevar && <span className="text-muted-foreground text-xs">Llevar: S/ {Number(p.precio_llevar).toFixed(2)}</span>}
                               </div>
                             </div>
                             <div className="flex flex-col gap-1 shrink-0">
@@ -275,7 +275,11 @@ export function CartaClient({ categorias: initCats, productos: initProds, tenant
                   value={prodForm.watch('categoria_id')}
                   onValueChange={(v) => prodForm.setValue('categoria_id', v ?? '')}
                 >
-                  <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                  <SelectTrigger>
+                    <span className="truncate text-sm">
+                      {categorias.find((c) => c.id === prodForm.watch('categoria_id'))?.nombre ?? <span className="text-muted-foreground">Selecciona…</span>}
+                    </span>
+                  </SelectTrigger>
                   <SelectContent>
                     {categorias.map((c) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
                   </SelectContent>

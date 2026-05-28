@@ -10,7 +10,14 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(pnpm build *)"
+      "Bash(pnpm build *)",
+      "mcp__0cfb0042-0978-4744-94d1-fb2afd4b6c85__list_projects",
+      "mcp__0cfb0042-0978-4744-94d1-fb2afd4b6c85__get_project_url",
+      "mcp__0cfb0042-0978-4744-94d1-fb2afd4b6c85__get_logs",
+      "Bash(npx vercel *)",
+      "mcp__e1b4c710-7242-493d-8ca7-634322a8fa85__get_runtime_logs",
+      "Bash(node -e \"const z = require\\('zod'\\); console.log\\(z.version ?? require\\('./node_modules/zod/package.json'\\).version\\)\")",
+      "Bash(node -e ' *)"
     ]
   }
 }

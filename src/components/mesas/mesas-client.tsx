@@ -65,14 +65,14 @@ export function MesasClient({ salones: initSalones, mesas: initMesas, tenantId }
     if (salonDialog.editando) {
       const { data: updated, error } = await supabase
         .from('salones').update(data).eq('id', salonDialog.editando.id).select().single()
-      if (error) { toast.error('Error al actualizar salón'); return }
+      if (error) { toast.error(`Error al actualizar salón: ${error.message}`); return }
       setSalones((p) => p.map((s) => s.id === salonDialog.editando!.id ? updated as Salon : s))
       toast.success('Salón actualizado')
     } else {
       const orden = salones.length + 1
       const { data: created, error } = await supabase
         .from('salones').insert({ ...data, tenant_id: tenantId, orden }).select().single()
-      if (error) { toast.error('Error al crear salón'); return }
+      if (error) { toast.error(`Error al crear salón: ${error.message}`); return }
       setSalones((p) => [...p, created as Salon])
       toast.success('Salón creado')
     }
@@ -105,13 +105,13 @@ export function MesasClient({ salones: initSalones, mesas: initMesas, tenantId }
     if (mesaDialog.editando) {
       const { data: updated, error } = await supabase
         .from('mesas').update(data).eq('id', mesaDialog.editando.id).select().single()
-      if (error) { toast.error('Error al actualizar mesa'); return }
+      if (error) { toast.error(`Error al actualizar mesa: ${error.message}`); return }
       setMesas((p) => p.map((m) => m.id === mesaDialog.editando!.id ? updated as Mesa : m))
       toast.success('Mesa actualizada')
     } else {
       const { data: created, error } = await supabase
         .from('mesas').insert({ ...data, tenant_id: tenantId }).select().single()
-      if (error) { toast.error('Error al crear mesa'); return }
+      if (error) { toast.error(`Error al crear mesa: ${error.message}`); return }
       setMesas((p) => [...p, created as Mesa])
       toast.success('Mesa creada')
     }
@@ -241,7 +241,11 @@ export function MesasClient({ salones: initSalones, mesas: initMesas, tenantId }
             <div className="space-y-1">
               <Label>Salón</Label>
               <Select value={mesaForm.watch('salon_id')} onValueChange={(v) => mesaForm.setValue('salon_id', v ?? '')}>
-                <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                <SelectTrigger>
+                  <span className="truncate text-sm">
+                    {salones.find((s) => s.id === mesaForm.watch('salon_id'))?.nombre ?? <span className="text-muted-foreground">Selecciona…</span>}
+                  </span>
+                </SelectTrigger>
                 <SelectContent>
                   {salones.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)}
                 </SelectContent>

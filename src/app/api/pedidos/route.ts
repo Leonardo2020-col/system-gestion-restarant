@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import type { Usuario } from '@/types/supabase'
 
+/* El cliente sólo envía lo que no podemos derivar del server */
 const schema = z.object({
-  tenant_id: z.string().uuid(),
-  usuario_id: z.string().uuid(),
-  mesa_id: z.string().uuid().nullable(),
+  mesa_id: z.string().nullable(),          // UUID real o null — validado como string
   tipo: z.enum(['salon', 'llevar', 'delivery']),
-  total: z.number().positive(),
+  total: z.coerce.number().positive(),
   notas: z.string().optional(),
   items: z.array(
     z.object({
-      producto_id: z.string().uuid(),
-      cantidad: z.number().int().positive(),
-      precio_unit: z.number().positive(),
+      producto_id: z.string().min(1),
+      cantidad: z.coerce.number().int().positive(),
+      precio_unit: z.coerce.number().positive(),
       notas: z.string().optional(),
     })
   ).min(1),
@@ -21,10 +21,17 @@ const schema = z.object({
 
 export async function POST(req: Request) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
+  /* 1. Auth — derivamos tenant_id y usuario_id del servidor, nunca del body */
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
+  const { data: rawUsuario } = await supabase
+    .from('usuarios').select('id, tenant_id').eq('id', user.id).single()
+  const usuario = rawUsuario as Pick<Usuario, 'id' | 'tenant_id'> | null
+  if (!usuario) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 403 })
+
+  /* 2. Validar body */
   const body = await req.json()
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
@@ -33,9 +40,19 @@ export async function POST(req: Request) {
 
   const { items, ...pedidoData } = parsed.data
 
+  /* 3. Insertar pedido */
   const { data: pedido, error: pedidoError } = await supabase
     .from('pedidos')
-    .insert({ ...pedidoData, descuento: 0, canal: 'pos' })
+    .insert({
+      tenant_id: usuario.tenant_id,
+      usuario_id: usuario.id,
+      mesa_id: pedidoData.mesa_id,
+      tipo: pedidoData.tipo,
+      total: pedidoData.total,
+      descuento: 0,
+      canal: 'pos',
+      notas: pedidoData.notas ?? null,
+    })
     .select()
     .single()
 
@@ -43,6 +60,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: pedidoError.message }, { status: 500 })
   }
 
+  /* 4. Insertar ítems */
   const { error: itemsError } = await supabase.from('pedido_items').insert(
     items.map((item) => ({
       pedido_id: pedido.id,
@@ -59,7 +77,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: itemsError.message }, { status: 500 })
   }
 
-  // Marcar mesa como ocupada
+  /* 5. Marcar mesa como ocupada */
   if (pedidoData.mesa_id) {
     await supabase.from('mesas').update({ estado: 'ocupada' }).eq('id', pedidoData.mesa_id)
   }
