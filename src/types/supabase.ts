@@ -479,6 +479,22 @@ export type Database = {
           precio_unit?: number
         }
       }
+      sucursales: {
+        Row: {
+          id: string; tenant_id: string; nombre: string; direccion: string | null
+          telefono: string | null; email: string | null; activo: boolean
+          es_principal: boolean; created_at: string
+        }
+        Insert: {
+          id?: string; tenant_id: string; nombre: string; direccion?: string | null
+          telefono?: string | null; email?: string | null; activo?: boolean
+          es_principal?: boolean; created_at?: string
+        }
+        Update: {
+          nombre?: string; direccion?: string | null; telefono?: string | null
+          email?: string | null; activo?: boolean; es_principal?: boolean
+        }
+      }
       configuracion_facturacion: {
         Row: {
           id: string
@@ -661,6 +677,7 @@ export type PedidoConItems = Pedido & {
 }
 
 export type ConfiguracionFacturacion = Tables<'configuracion_facturacion'>
+export type Sucursal = Tables<'sucursales'>
 
 export type MesaConSalon = Mesa & {
   salon?: Pick<Salon, 'nombre'>

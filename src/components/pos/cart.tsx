@@ -13,7 +13,7 @@ type Props = {
 }
 
 export function Cart({ onEnviar, submitting, hayPedidoActivo, pedidoActivoTotal, onCobrar }: Props) {
-  const { cart, updateCantidad, removeItem, total, clearCart, tipoPedido, setTipo } = usePosStore()
+  const { cart, updateCantidad, removeItem, updateNotas, total, clearCart, tipoPedido, setTipo } = usePosStore()
 
   return (
     <div className="flex flex-col h-full bg-card rounded-xl border border-border overflow-hidden">
@@ -57,28 +57,39 @@ export function Cart({ onEnviar, submitting, hayPedidoActivo, pedidoActivoTotal,
             </p>
           ) : (
             cart.map((item) => (
-              <div key={item.producto.id} className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-foreground text-sm truncate">{item.producto.nombre}</p>
-                  <p className="text-muted-foreground text-xs">
-                    S/ {(Number(item.producto.precio_salon) * item.cantidad).toFixed(2)}
-                  </p>
+              <div key={item.producto.id} className="space-y-1.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-foreground text-sm truncate">{item.producto.nombre}</p>
+                    <p className="text-muted-foreground text-xs">
+                      S/ {(Number(item.producto.precio_salon) * item.cantidad).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => updateCantidad(item.producto.id, item.cantidad - 1)}
+                      className="w-7 h-7 rounded bg-muted text-foreground text-lg leading-none hover:bg-accent flex items-center justify-center"
+                    >−</button>
+                    <span className="w-6 text-center text-foreground text-sm">{item.cantidad}</span>
+                    <button
+                      onClick={() => updateCantidad(item.producto.id, item.cantidad + 1)}
+                      className="w-7 h-7 rounded bg-muted text-foreground text-lg leading-none hover:bg-accent flex items-center justify-center"
+                    >+</button>
+                    <button
+                      onClick={() => removeItem(item.producto.id)}
+                      className="w-7 h-7 rounded text-red-500 hover:text-red-600 flex items-center justify-center text-xs ml-1"
+                    >✕</button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => updateCantidad(item.producto.id, item.cantidad - 1)}
-                    className="w-7 h-7 rounded bg-muted text-foreground text-lg leading-none hover:bg-accent flex items-center justify-center"
-                  >−</button>
-                  <span className="w-6 text-center text-foreground text-sm">{item.cantidad}</span>
-                  <button
-                    onClick={() => updateCantidad(item.producto.id, item.cantidad + 1)}
-                    className="w-7 h-7 rounded bg-muted text-foreground text-lg leading-none hover:bg-accent flex items-center justify-center"
-                  >+</button>
-                  <button
-                    onClick={() => removeItem(item.producto.id)}
-                    className="w-7 h-7 rounded text-red-500 hover:text-red-600 flex items-center justify-center text-xs ml-1"
-                  >✕</button>
-                </div>
+                {/* Observación */}
+                <input
+                  type="text"
+                  value={item.notas ?? ''}
+                  onChange={(e) => updateNotas(item.producto.id, e.target.value)}
+                  placeholder="Observación (ej: sin picante, extra queso…)"
+                  className="w-full text-xs px-2 py-1 rounded bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  maxLength={80}
+                />
               </div>
             ))
           )}

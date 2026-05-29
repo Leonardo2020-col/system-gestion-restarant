@@ -1,8 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent } from '@/components/ui/card'
+import { ReportesClient } from '@/components/reportes/reportes-client'
 import type { Usuario } from '@/types/supabase'
-
-type PedidoResumen = { id: string; total: number }
+import { startOfMonth } from 'date-fns'
 
 export default async function ReportesPage() {
   const supabase = await createClient()
@@ -11,57 +10,73 @@ export default async function ReportesPage() {
   const usuario = rawUsuario as Usuario | null
   if (!usuario) return null
 
-  const hoy = new Date()
-  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).toISOString()
-  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString()
+  const tenantId = usuario.tenant_id
+  const inicioMes = startOfMonth(new Date()).toISOString()
+  const ahora = new Date().toISOString()
 
-  const [resHoy, resMes] = await Promise.all([
-    supabase
-      .from('pedidos')
-      .select('id, total')
-      .eq('tenant_id', usuario.tenant_id)
-      .eq('estado', 'entregado')
-      .gte('created_at', inicioHoy),
-    supabase
-      .from('pedidos')
-      .select('id, total')
-      .eq('tenant_id', usuario.tenant_id)
-      .eq('estado', 'entregado')
-      .gte('created_at', inicioMes),
-  ])
+  /* Pedidos del mes */
+  const { data: pedidos } = await supabase
+    .from('pedidos')
+    .select('id, total, tipo, estado, created_at')
+    .eq('tenant_id', tenantId)
+    .gte('created_at', inicioMes)
+    .lte('created_at', ahora)
 
-  const pedidosHoy = (resHoy.data ?? []) as PedidoResumen[]
-  const pedidosMes = (resMes.data ?? []) as PedidoResumen[]
+  const entregados = (pedidos ?? []).filter((p) => p.estado === 'entregado')
+  const cancelados = (pedidos ?? []).filter((p) => p.estado === 'anulado').length
+  const ventasTotal = entregados.reduce((s, p) => s + Number(p.total), 0)
 
-  const ventasHoy = pedidosHoy.reduce((s, p) => s + Number(p.total), 0)
-  const ventasMes = pedidosMes.reduce((s, p) => s + Number(p.total), 0)
-  const ticketPromedio = pedidosMes.length ? ventasMes / pedidosMes.length : 0
+  /* Ventas por día */
+  const mapaFecha: Record<string, { pedidos: number; ventas: number }> = {}
+  for (const p of entregados) {
+    const d = (p.created_at as string).slice(0, 10)
+    if (!mapaFecha[d]) mapaFecha[d] = { pedidos: 0, ventas: 0 }
+    mapaFecha[d].pedidos += 1
+    mapaFecha[d].ventas += Number(p.total)
+  }
+  const dias = Object.entries(mapaFecha)
+    .map(([fecha, v]) => ({ fecha, ...v }))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha))
+
+  /* Por tipo */
+  const mapaTipo: Record<string, { pedidos: number; total: number }> = {}
+  for (const p of entregados) {
+    if (!mapaTipo[p.tipo]) mapaTipo[p.tipo] = { pedidos: 0, total: 0 }
+    mapaTipo[p.tipo].pedidos += 1
+    mapaTipo[p.tipo].total += Number(p.total)
+  }
+  const tipos = Object.entries(mapaTipo).map(([tipo, v]) => ({ tipo, ...v }))
+
+  /* Top productos */
+  let top: { nombre: string; total_vendido: number; ingresos: number }[] = []
+  const ids = entregados.map((p) => p.id)
+  if (ids.length > 0) {
+    const { data: items } = await supabase
+      .from('pedido_items')
+      .select('producto_id, cantidad, precio_unit, producto:productos(nombre)')
+      .in('pedido_id', ids)
+    const mapaP: Record<string, { nombre: string; total_vendido: number; ingresos: number }> = {}
+    for (const it of items ?? []) {
+      const n = (it as any).producto?.nombre ?? it.producto_id
+      if (!mapaP[it.producto_id]) mapaP[it.producto_id] = { nombre: n, total_vendido: 0, ingresos: 0 }
+      mapaP[it.producto_id].total_vendido += Number(it.cantidad)
+      mapaP[it.producto_id].ingresos += Number(it.cantidad) * Number(it.precio_unit)
+    }
+    top = Object.values(mapaP).sort((a, b) => b.total_vendido - a.total_vendido).slice(0, 10)
+  }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-foreground text-2xl font-bold">Reportes</h1>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Ventas hoy', value: `S/ ${ventasHoy.toFixed(2)}`, sub: `${pedidosHoy.length} pedidos` },
-          { label: 'Ventas del mes', value: `S/ ${ventasMes.toFixed(2)}`, sub: `${pedidosMes.length} pedidos` },
-          { label: 'Ticket promedio', value: `S/ ${ticketPromedio.toFixed(2)}`, sub: 'Este mes' },
-          { label: 'Pedidos entregados', value: String(pedidosMes.length), sub: 'Este mes' },
-        ].map((item) => (
-          <Card key={item.label}>
-            <CardContent className="pt-5 pb-4">
-              <p className="text-muted-foreground text-xs mb-1">{item.label}</p>
-              <p className="text-foreground text-2xl font-bold">{item.value}</p>
-              <p className="text-muted-foreground text-xs mt-1">{item.sub}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="text-muted-foreground text-center py-12 bg-muted/50 rounded-xl border border-border">
-        <p className="text-3xl mb-3">📊</p>
-        <p>Gráficos y exportación CSV disponibles en la Fase 2</p>
-      </div>
-    </div>
+    <ReportesClient
+      tenantId={tenantId}
+      inicialResumen={{
+        ventasTotal,
+        pedidosTotal: entregados.length,
+        ticketPromedio: entregados.length ? ventasTotal / entregados.length : 0,
+        cancelados,
+      }}
+      inicialDias={dias}
+      inicialTop={top}
+      inicialTipos={tipos}
+    />
   )
 }

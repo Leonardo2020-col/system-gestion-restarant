@@ -37,6 +37,8 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/compras') ||
     request.nextUrl.pathname.startsWith('/clientes') ||
     request.nextUrl.pathname.startsWith('/reportes') ||
+    request.nextUrl.pathname.startsWith('/facturas') ||
+    request.nextUrl.pathname.startsWith('/sucursales') ||
     request.nextUrl.pathname.startsWith('/ajustes')
 
   if (!user && isProtected) {

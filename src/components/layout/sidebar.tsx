@@ -7,16 +7,18 @@ import { useTheme } from '@/components/theme-provider'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { href: '/pos', label: 'POS', icon: '🛒' },
-  { href: '/cocina', label: 'Cocina', icon: '🍳' },
-  { href: '/mesas', label: 'Mesas', icon: '🪑' },
-  { href: '/carta', label: 'Carta', icon: '📋' },
-  { href: '/inventario', label: 'Inventario', icon: '📦' },
-  { href: '/caja', label: 'Caja', icon: '💰' },
-  { href: '/compras', label: 'Compras', icon: '🛍️' },
-  { href: '/clientes', label: 'Clientes', icon: '👥' },
-  { href: '/reportes', label: 'Reportes', icon: '📊' },
-  { href: '/ajustes', label: 'Ajustes', icon: '⚙️' },
+  { href: '/pos',        label: 'POS',        icon: '🛒' },
+  { href: '/cocina',     label: 'Cocina',      icon: '🍳' },
+  { href: '/mesas',      label: 'Mesas',       icon: '🪑' },
+  { href: '/carta',      label: 'Carta',       icon: '📋' },
+  { href: '/inventario', label: 'Inventario',  icon: '📦' },
+  { href: '/caja',       label: 'Caja',        icon: '💰' },
+  { href: '/compras',    label: 'Compras',     icon: '🛍️' },
+  { href: '/clientes',   label: 'Clientes',    icon: '👥' },
+  { href: '/facturas',   label: 'Facturas',    icon: '🧾' },
+  { href: '/reportes',   label: 'Reportes',    icon: '📊' },
+  { href: '/sucursales', label: 'Sucursales',  icon: '🏪' },
+  { href: '/ajustes',    label: 'Ajustes',     icon: '⚙️' },
 ]
 
 export function Sidebar() {

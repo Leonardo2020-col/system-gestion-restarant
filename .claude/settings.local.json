@@ -17,7 +17,9 @@
       "Bash(npx vercel *)",
       "mcp__e1b4c710-7242-493d-8ca7-634322a8fa85__get_runtime_logs",
       "Bash(node -e \"const z = require\\('zod'\\); console.log\\(z.version ?? require\\('./node_modules/zod/package.json'\\).version\\)\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(Get-ChildItem -Path \"next.config.*\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ]
   }
 }

@@ -112,7 +112,7 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
           cantidad: i.cantidad,
           precio_unit: Number(i.producto.precio_salon),
           descuento: 0,
-          notas: i.notas ?? null,
+          notas: i.notas?.trim() || null,
           estado: 'pendiente' as const,
         }))
         const { error: errItems } = await supabase.from('pedido_items').insert(itemsInsert)
@@ -150,6 +150,7 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
               producto_id: i.producto.id,
               cantidad: i.cantidad,
               precio_unit: Number(i.producto.precio_salon),
+              notas: i.notas?.trim() || undefined,
             })),
           }),
         })
@@ -228,54 +229,113 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
     setClienteResults((data ?? []) as Cliente[])
   }
 
-  /* ── Crear cliente nuevo ── */
-  async function crearCliente() {
-    if (!nuevoCliente.nombre) { toast.error('El nombre es obligatorio'); return }
+  /* ── Crear / guardar cliente nuevo ── devuelve el id o null ── */
+  async function guardarNuevoCliente(): Promise<{ id: string; nombre: string } | null> {
+    if (!nuevoCliente.nombre.trim()) { toast.error('El nombre del cliente es obligatorio'); return null }
     const { data, error } = await supabase
       .from('clientes')
-      .insert({ tenant_id: tenantId, nombre: nuevoCliente.nombre, dni_ruc: nuevoCliente.dni_ruc || null, telefono: nuevoCliente.telefono || null })
-      .select().single()
-    if (error) { toast.error(`Error: ${error.message}`); return }
+      .insert({
+        tenant_id: tenantId,
+        nombre: nuevoCliente.nombre.trim(),
+        dni_ruc: nuevoCliente.dni_ruc.trim() || null,
+        telefono: nuevoCliente.telefono.trim() || null,
+      })
+      .select('id, nombre')
+      .single()
+    if (error) { toast.error(`Error al guardar cliente: ${error.message}`); return null }
     store.setCliente(data.id, data.nombre)
     setCreandoCliente(false)
-    toast.success('Cliente registrado')
+    setNuevoCliente({ nombre: '', dni_ruc: '', telefono: '' })
+    toast.success(`Cliente "${data.nombre}" registrado ✓`)
+    return { id: data.id, nombre: data.nombre }
+  }
+
+  /* Botón explícito "Guardar cliente" (sin cobrar) */
+  async function crearCliente() {
+    await guardarNuevoCliente()
   }
 
   /* ── Confirmar cobro ── */
   async function confirmarCobro() {
-    if (!store.pedidoActivoId) return
+    if (!store.pedidoActivoId || !store.mesaId) return
     setCobrando(true)
     try {
-      /* Marcar pedido como entregado */
-      await supabase
+      /* 0. Si el formulario de nuevo cliente está abierto y tiene nombre → guardarlo primero */
+      let clienteIdFinal = store.clienteId
+      if (creandoCliente && nuevoCliente.nombre.trim()) {
+        const cli = await guardarNuevoCliente()
+        if (!cli) { setCobrando(false); return }
+        clienteIdFinal = cli.id
+      }
+
+      /* 1. Marcar pedido como entregado + vincular cliente */
+      const { error: errPedido } = await supabase
         .from('pedidos')
-        .update({ estado: 'entregado', ...(store.clienteId ? { cliente_id: store.clienteId } : {}) })
+        .update({
+          estado: 'entregado',
+          ...(clienteIdFinal ? { cliente_id: clienteIdFinal } : {}),
+        })
         .eq('id', store.pedidoActivoId)
+      if (errPedido) throw new Error(`Pedido: ${errPedido.message}`)
 
-      /* Marcar mesa como libre */
-      await supabase.from('mesas').update({ estado: 'libre' }).eq('id', store.mesaId)
+      /* 2. Liberar mesa */
+      const { error: errMesa } = await supabase
+        .from('mesas')
+        .update({ estado: 'libre' })
+        .eq('id', store.mesaId)
+      if (errMesa) throw new Error(`Mesa: ${errMesa.message}`)
 
-      /* Dar puntos al cliente si hay uno */
-      if (store.clienteId) {
-        const { data: cli } = await supabase.from('clientes').select('puntos').eq('id', store.clienteId).single()
-        if (cli) {
-          const puntosGanados = Math.floor(comandaTotal)
-          await supabase.from('clientes').update({ puntos: (cli.puntos ?? 0) + puntosGanados }).eq('id', store.clienteId)
+      /* 3. Registrar ingreso en caja abierta */
+      const { data: cajasOpen, error: errCajaBusq } = await supabase
+        .from('cajas')
+        .select('id')
+        .is('cerrada_at', null)
+        .order('abierta_at', { ascending: false })
+        .limit(1)
+
+      if (errCajaBusq) {
+        toast.warning(`Cobro completado, pero error buscando caja: ${errCajaBusq.message}`)
+      } else if (!cajasOpen || cajasOpen.length === 0) {
+        toast.warning('Cobro completado — no hay caja abierta. Abre la caja para registrar ingresos.')
+      } else {
+        const cajaId = cajasOpen[0].id
+        const concepto = `Venta Mesa ${mesaActual?.numero ?? '?'} — Pedido #${store.pedidoActivoId.slice(-6).toUpperCase()}${clienteIdFinal && store.clienteNombre ? ` | ${store.clienteNombre}` : ''}`
+        const { error: errMov } = await supabase
+          .from('movimientos_caja')
+          .insert({ caja_id: cajaId, tipo: 'ingreso', monto: comandaTotal, concepto })
+        if (errMov) {
+          toast.warning(`Cobro completado, pero no se registró en caja: ${errMov.message}`)
         }
       }
 
-      /* Actualizar lista local */
+      /* 4. Acumular puntos de fidelidad al cliente */
+      if (clienteIdFinal) {
+        const { data: cli } = await supabase
+          .from('clientes')
+          .select('puntos')
+          .eq('id', clienteIdFinal)
+          .single()
+        if (cli) {
+          const puntosGanados = Math.floor(comandaTotal) // 1 punto por cada sol
+          await supabase
+            .from('clientes')
+            .update({ puntos: (Number(cli.puntos) ?? 0) + puntosGanados })
+            .eq('id', clienteIdFinal)
+        }
+      }
+
+      /* 5. Actualizar UI */
       setMesas((prev) =>
         prev.map((m) => m.id === store.mesaId ? { ...m, estado: 'libre' as const } : m)
       )
-
-      toast.success(`Cobro confirmado — S/ ${comandaTotal.toFixed(2)} ✓`)
+      toast.success(`Cobro de S/ ${comandaTotal.toFixed(2)} registrado ✓`)
       setCobrarOpen(false)
       store.clearAll()
       setView('mesas')
       router.refresh()
     } catch (err) {
-      toast.error('Error al confirmar cobro')
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      toast.error(`Error al cobrar: ${msg}`)
     } finally {
       setCobrando(false)
     }
@@ -484,7 +544,12 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            {creandoCliente && nuevoCliente.nombre.trim() && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 self-center mr-auto">
+                ⚠️ Se guardará el cliente antes de cobrar
+              </p>
+            )}
             <Button variant="outline" onClick={() => setCobrarOpen(false)}>Cancelar</Button>
             <Button
               onClick={confirmarCobro}

@@ -1,10 +1,12 @@
-const CACHE_NAME = 'restaurantos-v1'
+const CACHE_NAME = 'restaurantos-v2'
 const STATIC_ASSETS = [
   '/',
   '/pos',
   '/cocina',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  '/mesas',
+  '/icons/icon.svg',
+  '/icons/icon-maskable.svg',
+  '/manifest.json',
 ]
 
 self.addEventListener('install', (event) => {
@@ -25,11 +27,42 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
+  // Skip Supabase API calls — always network
   if (event.request.url.includes('supabase.co')) return
-
-  event.respondWith(
-    caches.match(event.request).then(
-      (cached) => cached || fetch(event.request).catch(() => caches.match('/'))
+  // Skip Next.js internal routes
+  if (event.request.url.includes('/_next/')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
     )
-  )
+    return
+  }
+
+  // Cache-first for static assets, network-first for pages
+  const isStaticAsset =
+    event.request.destination === 'image' ||
+    event.request.destination === 'font' ||
+    event.request.url.includes('/icons/') ||
+    event.request.url.includes('/manifest.json')
+
+  if (isStaticAsset) {
+    event.respondWith(
+      caches.match(event.request).then(
+        (cached) => cached || fetch(event.request).then((res) => {
+          const clone = res.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
+          return res
+        })
+      )
+    )
+  } else {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          const clone = res.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
+          return res
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/')))
+    )
+  }
 })

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Maskable: safe zone is the inner 80% (approx 205x205 centered) -->
+  <rect width="512" height="512" fill="#0f172a"/>
+  <!-- Plate outer ring (scaled in to safe zone) -->
+  <circle cx="256" cy="270" r="118" fill="none" stroke="#f97316" stroke-width="15"/>
+  <!-- Plate inner ring -->
+  <circle cx="256" cy="270" r="74" fill="none" stroke="#f97316" stroke-width="9"/>
+  <!-- Fork tines -->
+  <line x1="160" y1="130" x2="160" y2="196" stroke="white" stroke-width="11" stroke-linecap="round"/>
+  <line x1="176" y1="130" x2="176" y2="196" stroke="white" stroke-width="11" stroke-linecap="round"/>
+  <line x1="192" y1="130" x2="192" y2="196" stroke="white" stroke-width="11" stroke-linecap="round"/>
+  <!-- Fork neck -->
+  <path d="M160 196 Q176 220 176 238 L176 382" stroke="white" stroke-width="11" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Knife -->
+  <path d="M330 130 Q362 164 362 218 L330 218 Z" fill="white"/>
+  <line x1="330" y1="130" x2="330" y2="382" stroke="white" stroke-width="11" stroke-linecap="round"/>
+</svg>
