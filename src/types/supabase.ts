@@ -479,6 +479,69 @@ export type Database = {
           precio_unit?: number
         }
       }
+      configuracion_facturacion: {
+        Row: {
+          id: string
+          tenant_id: string
+          igv_porcentaje: number
+          precios_con_igv: boolean
+          moneda: string
+          serie_boleta: string
+          serie_factura: string
+          serie_nota_venta: string
+          emite_boleta: boolean
+          emite_factura: boolean
+          emite_nota_venta: boolean
+          direccion: string | null
+          ubigeo: string | null
+          telefono_empresa: string | null
+          email_empresa: string | null
+          nota_pie: string | null
+          nubefact_token: string | null
+          nubefact_url_api: string | null
+          nubefact_modo: string | null
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          igv_porcentaje?: number
+          precios_con_igv?: boolean
+          moneda?: string
+          serie_boleta?: string
+          serie_factura?: string
+          serie_nota_venta?: string
+          emite_boleta?: boolean
+          emite_factura?: boolean
+          emite_nota_venta?: boolean
+          direccion?: string | null
+          ubigeo?: string | null
+          telefono_empresa?: string | null
+          email_empresa?: string | null
+          nota_pie?: string | null
+          nubefact_token?: string | null
+          nubefact_url_api?: string | null
+          nubefact_modo?: string | null
+        }
+        Update: {
+          igv_porcentaje?: number
+          precios_con_igv?: boolean
+          moneda?: string
+          serie_boleta?: string
+          serie_factura?: string
+          serie_nota_venta?: string
+          emite_boleta?: boolean
+          emite_factura?: boolean
+          emite_nota_venta?: boolean
+          direccion?: string | null
+          ubigeo?: string | null
+          telefono_empresa?: string | null
+          email_empresa?: string | null
+          nota_pie?: string | null
+          nubefact_token?: string | null
+          nubefact_url_api?: string | null
+          nubefact_modo?: string | null
+        }
+      }
       cajas: {
         Row: {
           id: string
@@ -596,6 +659,8 @@ export type PedidoConItems = Pedido & {
     producto?: Pick<Producto, 'nombre'>
   })[]
 }
+
+export type ConfiguracionFacturacion = Tables<'configuracion_facturacion'>
 
 export type MesaConSalon = Mesa & {
   salon?: Pick<Salon, 'nombre'>
