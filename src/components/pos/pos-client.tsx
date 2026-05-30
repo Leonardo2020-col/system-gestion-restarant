@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -16,6 +16,9 @@ import type { Salon, Categoria, Cliente } from '@/types/supabase'
 import type { MesaConSalon } from '@/lib/queries/mesas'
 import type { ProductoConCategoria } from '@/lib/queries/productos'
 import type { PedidoItemDetalle } from '@/stores/pos.store'
+
+type TicketItem = { nombre: string; cantidad: number; notas?: string | null }
+type TicketData = { mesa: number | null; items: TicketItem[]; hora: string; esAgregado: boolean }
 
 type View = 'mesas' | 'productos' | 'cobrar'
 
@@ -46,6 +49,11 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
   const [cobrando, setCobrando] = useState(false)
   const [comandaItems, setComandaItems] = useState<PedidoItemDetalle[]>([])
   const [comandaTotal, setComandaTotal] = useState(0)
+
+  /* ── Ticket de cocina ── */
+  const [ticketOpen, setTicketOpen] = useState(false)
+  const [ticketData, setTicketData] = useState<TicketData | null>(null)
+  const ticketRef = useRef<HTMLDivElement>(null)
 
   /* ── Seleccionar mesa ── */
   async function selectMesa(mesa: MesaConSalon) {
@@ -98,10 +106,56 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
     }
   }
 
+  /* ── Mostrar ticket de cocina ── */
+  function mostrarTicket(items: TicketItem[], esAgregado: boolean) {
+    setTicketData({
+      mesa: mesaActual?.numero ?? null,
+      items,
+      hora: new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+      esAgregado,
+    })
+    setTicketOpen(true)
+  }
+
+  function imprimirTicket() {
+    const el = ticketRef.current
+    if (!el) return
+    const win = window.open('', '_blank', 'width=400,height=600')
+    if (!win) return
+    win.document.write(`
+      <html><head><title>Comanda Cocina</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: monospace; font-size: 13px; padding: 12px; }
+        .ticket-header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+        .ticket-title { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
+        .ticket-sub { font-size: 12px; margin-top: 2px; }
+        .ticket-item { padding: 4px 0; border-bottom: 1px dashed #ccc; }
+        .ticket-item-name { font-weight: bold; font-size: 14px; }
+        .ticket-item-qty { font-size: 13px; }
+        .ticket-item-nota { font-size: 11px; font-style: italic; color: #444; margin-top: 2px; }
+        .ticket-footer { text-align: center; margin-top: 10px; font-size: 11px; color: #666; }
+      </style></head><body>
+      ${el.innerHTML}
+      </body></html>
+    `)
+    win.document.close()
+    win.focus()
+    win.print()
+    win.close()
+  }
+
   /* ── Enviar a cocina ── */
   async function enviarPedido() {
     if (store.cart.length === 0) { toast.error('El carrito está vacío'); return }
     setSubmitting(true)
+
+    /* Capturar items del carrito antes de limpiar */
+    const ticketItems: TicketItem[] = store.cart.map((i) => ({
+      nombre: i.producto.nombre,
+      cantidad: i.cantidad,
+      notas: i.notas?.trim() || null,
+    }))
 
     try {
       if (store.pedidoActivoId) {
@@ -137,6 +191,7 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
         )
         store.clearCart()
         toast.success('Platos agregados a la comanda ✓')
+        mostrarTicket(ticketItems, true)
       } else {
         /* ─ NUEVO pedido ─ */
         const res = await fetch('/api/pedidos', {
@@ -177,6 +232,7 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
         )
         store.clearCart()
         toast.success('Pedido enviado a cocina ✓')
+        mostrarTicket(ticketItems, false)
         router.refresh()
       }
     } catch (err) {
@@ -443,6 +499,62 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
           />
         </div>
       )}
+
+      {/* ── Dialog Ticket Cocina ── */}
+      <Dialog open={ticketOpen} onOpenChange={(v) => !v && setTicketOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Ticket para cocina</DialogTitle>
+          </DialogHeader>
+
+          {ticketData && (
+            <div
+              ref={ticketRef}
+              className="font-mono text-sm bg-white text-black rounded-lg border border-dashed border-gray-400 p-4 space-y-2"
+            >
+              <div className="ticket-header text-center border-b-2 border-dashed border-black pb-2 mb-2">
+                <div className="ticket-title text-base font-bold tracking-widest uppercase">
+                  {ticketData.esAgregado ? '⊕ ADICIONAL COCINA' : '✦ COMANDA COCINA'}
+                </div>
+                <div className="ticket-sub text-xs mt-1">
+                  {ticketData.mesa ? `Mesa ${ticketData.mesa}` : 'Sin mesa'} — {ticketData.hora}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {ticketData.items.map((item, i) => (
+                  <div key={i} className="ticket-item border-b border-dashed border-gray-300 pb-1">
+                    <div className="ticket-item-qty font-bold text-lg leading-tight">
+                      {item.cantidad}× <span className="ticket-item-name">{item.nombre}</span>
+                    </div>
+                    {item.notas && (
+                      <div className="ticket-item-nota text-xs italic text-gray-600 pl-4">
+                        → {item.notas}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="ticket-footer text-center text-xs text-gray-400 pt-1 border-t border-dashed border-gray-300">
+                {new Date().toLocaleDateString('es-PE')}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            <Button variant="outline" onClick={() => setTicketOpen(false)} className="flex-1">
+              Cerrar
+            </Button>
+            <Button
+              onClick={imprimirTicket}
+              className="flex-1 bg-gray-900 hover:bg-gray-700 text-white"
+            >
+              🖨️ Imprimir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Dialog Cobrar ── */}
       <Dialog open={cobrarOpen} onOpenChange={(v) => !v && setCobrarOpen(false)}>

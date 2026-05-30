@@ -19,7 +19,8 @@
       "Bash(node -e \"const z = require\\('zod'\\); console.log\\(z.version ?? require\\('./node_modules/zod/package.json'\\).version\\)\")",
       "Bash(node -e ' *)",
       "Bash(Get-ChildItem -Path \"next.config.*\" -ErrorAction SilentlyContinue)",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(npx tsc *)"
     ]
   }
 }
