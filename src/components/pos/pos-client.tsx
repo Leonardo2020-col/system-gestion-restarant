@@ -53,6 +53,7 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
   /* ── Ticket de cocina ── */
   const [ticketOpen, setTicketOpen] = useState(false)
   const [ticketData, setTicketData] = useState<TicketData | null>(null)
+  const [paperSize, setPaperSize] = useState<'80mm' | '58mm'>('80mm')
   const ticketRef = useRef<HTMLDivElement>(null)
 
   /* ── Seleccionar mesa ── */
@@ -118,31 +119,119 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
   }
 
   function imprimirTicket() {
-    const el = ticketRef.current
-    if (!el) return
-    const win = window.open('', '_blank', 'width=400,height=600')
+    if (!ticketData) return
+
+    /* Anchos según papel: 80mm → cuerpo 72mm | 58mm → cuerpo 50mm */
+    const bodyWidth  = paperSize === '80mm' ? '72mm' : '50mm'
+    const fontSize   = paperSize === '80mm' ? 14 : 12
+    const titleSize  = paperSize === '80mm' ? 18 : 15
+    const itemSize   = paperSize === '80mm' ? 16 : 13
+    const qtySize    = paperSize === '80mm' ? 20 : 16
+    const notaSize   = paperSize === '80mm' ? 13 : 11
+
+    const itemsHtml = ticketData.items.map((item) => `
+      <div class="item">
+        <div class="item-header">
+          <span class="qty">${item.cantidad}x</span>
+          <span class="name">${item.nombre}</span>
+        </div>
+        ${item.notas ? `
+        <div class="nota">
+          <span class="nota-icon">!</span> ${item.notas}
+        </div>` : ''}
+      </div>
+    `).join('')
+
+    const win = window.open('', '_blank', 'width=320,height=500')
     if (!win) return
-    win.document.write(`
-      <html><head><title>Comanda Cocina</title>
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: monospace; font-size: 13px; padding: 12px; }
-        .ticket-header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
-        .ticket-title { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
-        .ticket-sub { font-size: 12px; margin-top: 2px; }
-        .ticket-item { padding: 4px 0; border-bottom: 1px dashed #ccc; }
-        .ticket-item-name { font-weight: bold; font-size: 14px; }
-        .ticket-item-qty { font-size: 13px; }
-        .ticket-item-nota { font-size: 11px; font-style: italic; color: #444; margin-top: 2px; }
-        .ticket-footer { text-align: center; margin-top: 10px; font-size: 11px; color: #666; }
-      </style></head><body>
-      ${el.innerHTML}
-      </body></html>
-    `)
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Comanda</title>
+  <style>
+    @page {
+      size: ${paperSize} auto;
+      margin: 3mm 4mm;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: ${fontSize}px;
+      width: ${bodyWidth};
+      color: #000;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 2px dashed #000;
+      padding-bottom: 6px;
+      margin-bottom: 6px;
+    }
+    .titulo {
+      font-size: ${titleSize}px;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    .subtitulo {
+      font-size: ${fontSize}px;
+      margin-top: 3px;
+    }
+    .items { margin: 4px 0; }
+    .item {
+      padding: 6px 0;
+      border-bottom: 1px dashed #555;
+    }
+    .item-header { display: flex; align-items: baseline; gap: 4px; }
+    .qty {
+      font-size: ${qtySize}px;
+      font-weight: bold;
+      min-width: 28px;
+    }
+    .name {
+      font-size: ${itemSize}px;
+      font-weight: bold;
+      flex: 1;
+    }
+    .nota {
+      margin-top: 4px;
+      margin-left: 6px;
+      font-size: ${notaSize}px;
+      font-weight: bold;
+      background: #000;
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+    .nota-icon {
+      font-weight: bold;
+      margin-right: 4px;
+    }
+    .footer {
+      text-align: center;
+      font-size: ${fontSize - 2}px;
+      color: #555;
+      margin-top: 8px;
+      border-top: 1px dashed #000;
+      padding-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="titulo">${ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA'}</div>
+    <div class="subtitulo">
+      ${ticketData.mesa ? `MESA ${ticketData.mesa}` : 'SIN MESA'} &mdash; ${ticketData.hora}
+    </div>
+  </div>
+  <div class="items">${itemsHtml}</div>
+  <div class="footer">${new Date().toLocaleDateString('es-PE')}</div>
+</body>
+</html>`)
     win.document.close()
     win.focus()
-    win.print()
-    win.close()
+    setTimeout(() => { win.print(); win.close() }, 250)
   }
 
   /* ── Enviar a cocina ── */
@@ -507,36 +596,59 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
             <DialogTitle>Ticket para cocina</DialogTitle>
           </DialogHeader>
 
+          {/* Selector de tamaño de papel */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-medium">Papel:</span>
+            {(['80mm', '58mm'] as const).map((size) => (
+              <button
+                key={size}
+                onClick={() => setPaperSize(size)}
+                className={`px-3 py-1 rounded text-xs font-semibold border transition-colors ${
+                  paperSize === size
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'border-border text-muted-foreground hover:border-gray-500 hover:text-foreground'
+                }`}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+
+          {/* Preview del ticket */}
           {ticketData && (
             <div
               ref={ticketRef}
-              className="font-mono text-sm bg-white text-black rounded-lg border border-dashed border-gray-400 p-4 space-y-2"
+              className="font-mono bg-white text-black rounded-lg border-2 border-dashed border-gray-400 p-4 space-y-2 text-sm"
             >
-              <div className="ticket-header text-center border-b-2 border-dashed border-black pb-2 mb-2">
-                <div className="ticket-title text-base font-bold tracking-widest uppercase">
-                  {ticketData.esAgregado ? '⊕ ADICIONAL COCINA' : '✦ COMANDA COCINA'}
+              {/* Cabecera */}
+              <div className="text-center border-b-2 border-dashed border-black pb-2 mb-3">
+                <div className="text-base font-bold tracking-widest uppercase">
+                  {ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA'}
                 </div>
-                <div className="ticket-sub text-xs mt-1">
-                  {ticketData.mesa ? `Mesa ${ticketData.mesa}` : 'Sin mesa'} — {ticketData.hora}
+                <div className="text-xs mt-1 font-medium">
+                  {ticketData.mesa ? `MESA ${ticketData.mesa}` : 'SIN MESA'} — {ticketData.hora}
                 </div>
               </div>
 
+              {/* Items */}
               <div className="space-y-2">
                 {ticketData.items.map((item, i) => (
-                  <div key={i} className="ticket-item border-b border-dashed border-gray-300 pb-1">
-                    <div className="ticket-item-qty font-bold text-lg leading-tight">
-                      {item.cantidad}× <span className="ticket-item-name">{item.nombre}</span>
+                  <div key={i} className="border-b border-dashed border-gray-300 pb-2">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl font-bold leading-tight w-8 shrink-0">{item.cantidad}x</span>
+                      <span className="text-base font-bold leading-tight">{item.nombre}</span>
                     </div>
                     {item.notas && (
-                      <div className="ticket-item-nota text-xs italic text-gray-600 pl-4">
-                        → {item.notas}
+                      <div className="mt-1 ml-2 inline-block bg-black text-white text-xs font-bold px-2 py-0.5 rounded">
+                        ! {item.notas}
                       </div>
                     )}
                   </div>
                 ))}
               </div>
 
-              <div className="ticket-footer text-center text-xs text-gray-400 pt-1 border-t border-dashed border-gray-300">
+              {/* Pie */}
+              <div className="text-center text-xs text-gray-500 pt-1 border-t border-dashed border-gray-300">
                 {new Date().toLocaleDateString('es-PE')}
               </div>
             </div>
@@ -550,7 +662,7 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
               onClick={imprimirTicket}
               className="flex-1 bg-gray-900 hover:bg-gray-700 text-white"
             >
-              🖨️ Imprimir
+              🖨️ Imprimir {paperSize}
             </Button>
           </DialogFooter>
         </DialogContent>
