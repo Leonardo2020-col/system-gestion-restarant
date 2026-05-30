@@ -121,142 +121,81 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
   function imprimirTicket() {
     if (!ticketData) return
 
-    // ── Generamos el canvas en píxeles CSS exactos ────────────────────────
-    // 1 CSS px = 1/96 pulgada = 25.4/96 mm  →  1mm = 96/25.4 ≈ 3.78 px
-    // Así la imagen coincide 1:1 con los mm del papel sin ninguna escala.
-    const is80    = paperSize === '80mm'
-    const PAGE_MM = is80 ? 80 : 58
-    const px      = (mm: number) => Math.round(mm * 96 / 25.4)   // mm → CSS px
+    // ── Unidades físicas absolutas: pt para fuentes, mm para espacios ────
+    // 1 pt = 1/72 in = 0.353 mm  →  el browser nunca aplica DPI sobre estas.
+    // El iframe tiene width = ancho del papel para que no haya viewport-scaling.
+    const is80 = paperSize === '80mm'
+    const W    = is80 ? 80 : 58    // mm — ancho total del papel
+    const MAR  = 2                  // mm — margen cada lado
+    const BW   = W - MAR * 2       // mm — ancho del cuerpo
 
-    const canvasW    = px(PAGE_MM)
-    const MAR_PX     = px(3)
-    const contentWpx = canvasW - MAR_PX * 2
+    const FT = is80 ? 11 : 9   // pt — título
+    const FS = is80 ?  8 : 7   // pt — subtítulo / pie
+    const FQ = is80 ? 11 : 9   // pt — cantidad
+    const FN = is80 ?  9 : 8   // pt — nombre plato
+    const FA = is80 ?  8 : 7   // pt — observación
 
-    // Fuentes proporcionales al ancho real del papel
-    const F_TITLE = is80 ? 13 : 11
-    const F_SUB   = is80 ? 10 :  8
-    const F_QTY   = is80 ? 13 : 11
-    const F_NAME  = is80 ? 11 :  9
-    const F_NOTA  = is80 ? 10 :  8
-    const F_FOOT  = is80 ?  9 :  7
-    const LH      = (f: number) => Math.round(f * 1.45)
-    const GAP     = px(1.2)
-
-    // ── Altura total del canvas ──
-    let canvasH = MAR_PX
-    canvasH += LH(F_TITLE) + GAP
-    canvasH += LH(F_SUB) + px(1.5)
-    canvasH += px(2)   // separador cabecera
+    // Altura calculada en mm (1pt × 0.353 = mm, × 1.4 = line-height)
+    const lh = (pt: number) => +(pt * 0.353 * 1.4).toFixed(2)
+    let H = MAR * 2
+    H += lh(FT) + 1     // título
+    H += lh(FS) + 1     // subtítulo
+    H += 2              // separador cabecera
     ticketData.items.forEach((it) => {
-      canvasH += LH(F_NAME) + GAP
-      if (it.notas) canvasH += LH(F_NOTA) + GAP
-      canvasH += px(1)   // separador ítem
+      H += lh(FN) + 1   // fila ítem
+      if (it.notas) H += lh(FA) + 0.5  // observación
+      H += 1.5          // separador ítem
     })
-    canvasH += px(2) + LH(F_FOOT) + MAR_PX
+    H += 2 + lh(FS)     // pie
 
-    // ── Dibujar en canvas ──
-    const canvas  = document.createElement('canvas')
-    canvas.width  = canvasW
-    canvas.height = canvasH
-    const ctx     = canvas.getContext('2d')!
+    const itemsHtml = ticketData.items.map((it) => `
+      <div class="item">
+        <span class="qty">${it.cantidad}x</span><span class="name">${it.nombre}</span>
+        ${it.notas ? `<div class="nota">! ${it.notas}</div>` : ''}
+      </div>`).join('')
 
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, canvasW, canvasH)
-    ctx.fillStyle = '#000000'
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  @page { size: ${W}mm ${H.toFixed(1)}mm; margin: ${MAR}mm; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: ${FS}pt;
+    color: #000;
+    background: #fff;
+    width: ${BW}mm;
+  }
+  .head  { text-align:center; border-bottom:1.5pt solid #000; padding-bottom:1.5mm; margin-bottom:1.5mm; }
+  .title { font-size:${FT}pt; font-weight:bold; letter-spacing:0.5mm; }
+  .sub   { font-size:${FS}pt; margin-top:0.5mm; }
+  .item  { padding:1mm 0; border-bottom:0.5pt dashed #666; }
+  .qty   { font-size:${FQ}pt; font-weight:bold; margin-right:1mm; }
+  .name  { font-size:${FN}pt; font-weight:bold; }
+  .nota  { display:inline-block; margin-top:0.8mm; margin-left:1mm;
+           font-size:${FA}pt; font-weight:bold;
+           background:#000; color:#fff; padding:0.3mm 1mm; }
+  .foot  { text-align:center; border-top:0.5pt solid #000;
+           margin-top:1.5mm; padding-top:1mm;
+           font-size:${Math.max(FS - 1, 5)}pt; color:#444; }
+</style></head>
+<body>
+  <div class="head">
+    <div class="title">${ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA'}</div>
+    <div class="sub">${ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA'} &mdash; ${ticketData.hora}</div>
+  </div>
+  ${itemsHtml}
+  <div class="foot">${new Date().toLocaleDateString('es-PE')}</div>
+</body></html>`
 
-    const left = MAR_PX
-    let   cy   = MAR_PX
-
-    const dashedLine = (y: number, color = '#000000', lw = 1.5) => {
-      ctx.save()
-      ctx.setLineDash([px(2), px(1.5)])
-      ctx.strokeStyle = color
-      ctx.lineWidth   = lw
-      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + contentWpx, y); ctx.stroke()
-      ctx.restore()
-    }
-
-    // Título
-    ctx.textAlign = 'center'
-    ctx.font = `bold ${F_TITLE}px "Courier New", monospace`
-    ctx.fillText(ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA', left + contentWpx / 2, cy + F_TITLE)
-    cy += LH(F_TITLE) + GAP
-
-    // Subtítulo (mesa + hora)
-    ctx.font = `${F_SUB}px "Courier New", monospace`
-    ctx.fillText(
-      `${ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA'}  ${ticketData.hora}`,
-      left + contentWpx / 2, cy + F_SUB
-    )
-    cy += LH(F_SUB) + px(1.5)
-
-    dashedLine(cy, '#000000', 2)
-    cy += px(2.5)
-
-    // Ítems
-    ctx.textAlign = 'left'
-    ticketData.items.forEach((item) => {
-      ctx.fillStyle = '#000000'
-
-      // Cantidad
-      ctx.font = `bold ${F_QTY}px "Courier New", monospace`
-      const qtyStr = `${item.cantidad}x`
-      const qtyW   = ctx.measureText(qtyStr).width + px(1.5)
-      ctx.fillText(qtyStr, left, cy + F_QTY)
-
-      // Nombre
-      ctx.font = `bold ${F_NAME}px "Courier New", monospace`
-      ctx.fillText(item.nombre, left + qtyW, cy + F_QTY - (F_QTY - F_NAME) / 2)
-      cy += LH(F_NAME) + GAP
-
-      // Observación (fondo negro)
-      if (item.notas) {
-        const txt   = `! ${item.notas}`
-        ctx.font    = `bold ${F_NOTA}px "Courier New", monospace`
-        const noteW = Math.min(ctx.measureText(txt).width + px(3), contentWpx)
-        const noteH = LH(F_NOTA)
-        ctx.fillStyle = '#000000'
-        ctx.fillRect(left + px(1), cy, noteW, noteH)
-        ctx.fillStyle = '#ffffff'
-        ctx.fillText(txt, left + px(2.5), cy + F_NOTA)
-        ctx.fillStyle = '#000000'
-        cy += noteH + GAP
-      }
-
-      dashedLine(cy, '#777777', 1)
-      cy += px(1.5)
-    })
-
-    // Pie
-    cy += px(1)
-    dashedLine(cy, '#000000', 1.5)
-    cy += px(1.5)
-    ctx.textAlign = 'center'
-    ctx.font      = `${F_FOOT}px "Courier New", monospace`
-    ctx.fillStyle = '#555555'
-    ctx.fillText(new Date().toLocaleDateString('es-PE'), left + contentWpx / 2, cy + F_FOOT)
-
-    // ── Imprimir via iframe ──────────────────────────────────────────────
-    // La altura en mm se calcula proporcional al canvas (mismo ratio que CSS px)
-    const pageHmm = (canvasH * 25.4 / 96).toFixed(2)
-    const imgData = canvas.toDataURL('image/png')
-
+    // iframe con width = ancho del papel → el browser no aplica ningún zoom
     const iframe = document.createElement('iframe')
-    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;'
+    iframe.style.cssText = `position:fixed;top:0;left:0;width:${W}mm;height:1px;opacity:0;border:none;pointer-events:none;`
     document.body.appendChild(iframe)
 
     const doc = iframe.contentDocument
     if (!doc) { document.body.removeChild(iframe); return }
-
     doc.open()
-    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>
-  @page { size: ${PAGE_MM}mm ${pageHmm}mm; margin: 0; }
-  * { margin: 0; padding: 0; }
-  html, body { width: ${PAGE_MM}mm; background: #fff; }
-  img { display: block; width: ${PAGE_MM}mm; height: auto; }
-</style></head>
-<body><img src="${imgData}"/></body></html>`)
+    doc.write(html)
     doc.close()
 
     iframe.contentWindow?.focus()
