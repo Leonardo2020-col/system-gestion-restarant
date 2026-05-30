@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
+import jsPDF from 'jspdf'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -121,88 +122,107 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
   function imprimirTicket() {
     if (!ticketData) return
 
-    // ── Unidades físicas absolutas: pt para fuentes, mm para espacios ────
-    // 1 pt = 1/72 in = 0.353 mm  →  el browser nunca aplica DPI sobre estas.
-    // El iframe tiene width = ancho del papel para que no haya viewport-scaling.
     const is80 = paperSize === '80mm'
-    const W    = is80 ? 80 : 58    // mm — ancho total del papel
-    const MAR  = 2                  // mm — margen cada lado
-    const BW   = W - MAR * 2       // mm — ancho del cuerpo
+    const W    = is80 ? 80 : 58   // mm — ancho exacto del papel
+    const MAR  = 3                 // mm — margen izquierdo/derecho
+    const CW   = W - MAR * 2      // mm — área útil de contenido
 
-    const FT = is80 ? 11 : 9   // pt — título
-    const FS = is80 ?  8 : 7   // pt — subtítulo / pie
-    const FQ = is80 ? 11 : 9   // pt — cantidad
-    const FN = is80 ?  9 : 8   // pt — nombre plato
-    const FA = is80 ?  8 : 7   // pt — observación
+    /* Tamaños de fuente en pt (unidad absoluta; jsPDF los convierte a mm) */
+    const FT = is80 ? 10 : 9    // título
+    const FS = is80 ?  8 : 7    // base / pie
+    const FN = is80 ?  9 : 8    // nombre plato
+    const FA = is80 ?  7 : 6    // observación
 
-    // Altura calculada en mm (1pt × 0.353 = mm, × 1.4 = line-height)
-    const lh = (pt: number) => +(pt * 0.353 * 1.4).toFixed(2)
-    let H = MAR * 2
-    H += lh(FT) + 1     // título
-    H += lh(FS) + 1     // subtítulo
-    H += 2              // separador cabecera
+    /* ── Calcular alto total del PDF ────────────────────────────────────
+       jsPDF usa mm. Sabemos cuántas líneas habrá, estimamos el espacio. */
+    const ptToMm = (pt: number) => pt * 0.353
+    const LH     = (pt: number) => ptToMm(pt) * 1.5   // line-height en mm
+
+    let H = MAR
+    H += LH(FT) + 0.5   // título
+    H += LH(FS) + 1      // subtítulo
+    H += 2               // separador cabecera
     ticketData.items.forEach((it) => {
-      H += lh(FN) + 1   // fila ítem
-      if (it.notas) H += lh(FA) + 0.5  // observación
-      H += 1.5          // separador ítem
+      H += LH(FN) + 1    // línea de plato
+      if (it.notas) H += LH(FA) + 1  // observación
+      H += 1             // separador ítem
     })
-    H += 2 + lh(FS)     // pie
+    H += 2 + LH(FS) + MAR   // pie
 
-    const itemsHtml = ticketData.items.map((it) => `
-      <div class="item">
-        <span class="qty">${it.cantidad}x</span><span class="name">${it.nombre}</span>
-        ${it.notas ? `<div class="nota">! ${it.notas}</div>` : ''}
-      </div>`).join('')
+    /* ── Crear el PDF con dimensiones EXACTAS ─────────────────────────── */
+    const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
+    doc.setFont('courier')
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>
-  @page { size: ${W}mm ${H.toFixed(1)}mm; margin: ${MAR}mm; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: ${FS}pt;
-    color: #000;
-    background: #fff;
-    width: ${BW}mm;
-  }
-  .head  { text-align:center; border-bottom:1.5pt solid #000; padding-bottom:1.5mm; margin-bottom:1.5mm; }
-  .title { font-size:${FT}pt; font-weight:bold; letter-spacing:0.5mm; }
-  .sub   { font-size:${FS}pt; margin-top:0.5mm; }
-  .item  { padding:1mm 0; border-bottom:0.5pt dashed #666; }
-  .qty   { font-size:${FQ}pt; font-weight:bold; margin-right:1mm; }
-  .name  { font-size:${FN}pt; font-weight:bold; }
-  .nota  { display:inline-block; margin-top:0.8mm; margin-left:1mm;
-           font-size:${FA}pt; font-weight:bold;
-           background:#000; color:#fff; padding:0.3mm 1mm; }
-  .foot  { text-align:center; border-top:0.5pt solid #000;
-           margin-top:1.5mm; padding-top:1mm;
-           font-size:${Math.max(FS - 1, 5)}pt; color:#444; }
-</style></head>
-<body>
-  <div class="head">
-    <div class="title">${ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA'}</div>
-    <div class="sub">${ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA'} &mdash; ${ticketData.hora}</div>
-  </div>
-  ${itemsHtml}
-  <div class="foot">${new Date().toLocaleDateString('es-PE')}</div>
-</body></html>`
+    let y = MAR
 
-    // iframe con width = ancho del papel → el browser no aplica ningún zoom
-    const iframe = document.createElement('iframe')
-    iframe.style.cssText = `position:fixed;top:0;left:0;width:${W}mm;height:1px;opacity:0;border:none;pointer-events:none;`
-    document.body.appendChild(iframe)
+    /* Título */
+    doc.setFontSize(FT)
+    doc.setFont('courier', 'bold')
+    doc.text(ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA', W / 2, y + LH(FT), { align: 'center' })
+    y += LH(FT) + 0.5
 
-    const doc = iframe.contentDocument
-    if (!doc) { document.body.removeChild(iframe); return }
-    doc.open()
-    doc.write(html)
-    doc.close()
+    /* Subtítulo */
+    doc.setFontSize(FS)
+    doc.setFont('courier', 'normal')
+    doc.text(
+      `${ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA'}  ${ticketData.hora}`,
+      W / 2, y + LH(FS), { align: 'center' }
+    )
+    y += LH(FS) + 1
 
-    iframe.contentWindow?.focus()
-    setTimeout(() => {
-      iframe.contentWindow?.print()
-      setTimeout(() => document.body.removeChild(iframe), 1500)
-    }, 400)
+    /* Separador cabecera (línea continua) */
+    doc.setDrawColor(0)
+    doc.setLineWidth(0.4)
+    doc.line(MAR, y, W - MAR, y)
+    y += 2
+
+    /* Ítems */
+    ticketData.items.forEach((item) => {
+      /* Cantidad + nombre */
+      doc.setFontSize(FN)
+      doc.setFont('courier', 'bold')
+      const lineas = doc.splitTextToSize(`${item.cantidad}x  ${item.nombre}`, CW)
+      doc.text(lineas, MAR, y + LH(FN))
+      y += LH(FN) * lineas.length + 0.5
+
+      /* Observación con fondo negro */
+      if (item.notas) {
+        doc.setFontSize(FA)
+        const notaTxt = `! ${item.notas}`
+        const notaW   = Math.min(doc.getTextWidth(notaTxt) + 3, CW)
+        const notaH   = LH(FA) + 0.5
+        doc.setFillColor(0, 0, 0)
+        doc.rect(MAR, y, notaW, notaH, 'F')
+        doc.setTextColor(255, 255, 255)
+        doc.text(notaTxt, MAR + 1.5, y + LH(FA))
+        doc.setTextColor(0, 0, 0)
+        y += notaH + 0.5
+      }
+
+      /* Separador ítem (línea punteada) */
+      doc.setLineDashPattern([0.8, 0.8], 0)
+      doc.setDrawColor(120)
+      doc.setLineWidth(0.2)
+      doc.line(MAR, y, W - MAR, y)
+      doc.setLineDashPattern([], 0)
+      doc.setDrawColor(0)
+      y += 1.5
+    })
+
+    /* Pie */
+    y += 0.5
+    doc.setLineWidth(0.3)
+    doc.line(MAR, y, W - MAR, y)
+    y += 1.5
+    doc.setFontSize(FS - 1)
+    doc.setFont('courier', 'normal')
+    doc.setTextColor(80)
+    doc.text(new Date().toLocaleDateString('es-PE'), W / 2, y + LH(FS - 1), { align: 'center' })
+
+    /* ── Abrir PDF → el browser lanza automáticamente el diálogo de impresión */
+    doc.autoPrint()
+    const blob = doc.output('bloburl')
+    window.open(blob as unknown as string, '_blank')
   }
 
   /* ── Enviar a cocina ── */

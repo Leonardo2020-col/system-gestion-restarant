@@ -20,7 +20,8 @@
       "Bash(node -e ' *)",
       "Bash(Get-ChildItem -Path \"next.config.*\" -ErrorAction SilentlyContinue)",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(pnpm add *)"
     ]
   }
 }
