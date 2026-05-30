@@ -73,67 +73,49 @@ function buildTicketBytes(pedido: PedidoConItems, cols = 32): Uint8Array {
     .encode()
 }
 
-/* ── Hook de WebSerial (puerto persistente) ───────────────────────────── */
-function useSerialPrinter() {
-  const portRef   = useRef<SerialPort | null>(null)
-  const [status, setStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
-  const supported = typeof navigator !== 'undefined' && 'serial' in navigator
+/* ── Detector de modo (local vs nube) ─────────────────────────────────── */
+function isLocalhost() {
+  if (typeof window === 'undefined') return false
+  const h = window.location.hostname
+  return h === 'localhost' || h === '127.0.0.1' || h.startsWith('192.168.')
+}
 
-  /* Al montar: recuperar puerto previamente autorizado */
+/* ── Imprimir vía API local (solo funciona en localhost) ──────────────── */
+async function imprimirViaApi(
+  pedido: PedidoConItems,
+  paperSize: '58mm' | '80mm'
+): Promise<boolean> {
+  try {
+    const mesa = pedido.mesa ? pedido.mesa.numero : null
+    const items = (pedido.items ?? []).map((i) => ({
+      nombre:   i.producto?.nombre ?? '—',
+      cantidad: i.cantidad,
+      notas:    i.notas ?? null,
+    }))
+    const hora = format(new Date(pedido.created_at), 'HH:mm', { locale: es })
+
+    const res = await fetch('/api/imprimir-ticket', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ mesa, items, hora, esAgregado: false, paperSize }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/* ── Hook de estado de impresora ─────────────────────────────────────── */
+function usePrinterStatus() {
+  const [status, setStatus] = useState<'local' | 'cloud' | 'checking'>('checking')
+
   useEffect(() => {
-    if (!supported) { setStatus('disconnected'); return }
-    ;(navigator as any).serial.getPorts()
-      .then((ports: SerialPort[]) => {
-        if (ports.length > 0) { portRef.current = ports[0]; setStatus('connected') }
-        else setStatus('disconnected')
-      })
-      .catch(() => setStatus('disconnected'))
-  }, [supported])
-
-  /* Primera conexión: el usuario elige el puerto COM */
-  const conectar = useCallback(async () => {
-    if (!supported) { toast.error('Usa Chrome en PC para WebSerial'); return }
-    try {
-      const port: SerialPort = await (navigator as any).serial.requestPort()
-      portRef.current = port
-      setStatus('connected')
-      toast.success('Impresora conectada ✓ — permanecerá vinculada')
-    } catch {
-      toast.error('Conexión cancelada o puerto no encontrado')
-    }
-  }, [supported])
-
-  /* Desconectar */
-  const desconectar = useCallback(async () => {
-    if (portRef.current) {
-      try { await (portRef.current as any).forget?.() } catch {}
-      portRef.current = null
-    }
-    setStatus('disconnected')
+    // Pequeño delay para que el window esté disponible en el cliente
+    const t = setTimeout(() => setStatus(isLocalhost() ? 'local' : 'cloud'), 100)
+    return () => clearTimeout(t)
   }, [])
 
-  /* Enviar bytes al puerto abierto → imprimir */
-  const imprimir = useCallback(async (bytes: Uint8Array): Promise<boolean> => {
-    const port = portRef.current
-    if (!port) return false
-    try {
-      if (!(port as any).readable) await port.open({ baudRate: 9600 })
-      const writer = port.writable!.getWriter()
-      // Enviar en trozos de 512 bytes
-      for (let i = 0; i < bytes.length; i += 512) {
-        await writer.write(bytes.slice(i, i + 512))
-      }
-      writer.releaseLock()
-      await port.close()
-      return true
-    } catch (err) {
-      console.error('[serial]', err)
-      try { await port.close() } catch {}
-      return false
-    }
-  }, [])
-
-  return { status, conectar, desconectar, imprimir, supported }
+  return status
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
@@ -141,7 +123,8 @@ export function KdsClient({ pedidosIniciales, tenantId }: Props) {
   const queryClient = useQueryClient()
   const supabase    = createClient()
   const impresosRef = useRef<Set<string>>(new Set())
-  const printer     = useSerialPrinter()
+  const printerMode = usePrinterStatus()   // 'local' | 'cloud' | 'checking'
+  const [paperSize] = useState<'58mm' | '80mm'>('58mm')
 
   useKdsRealtime(tenantId)
 
@@ -165,16 +148,21 @@ export function KdsClient({ pedidosIniciales, tenantId }: Props) {
     initialData: pedidosIniciales,
   })
 
-  /* ── Imprimir un pedido ────────────────────────────────────────────── */
+  /* ── Imprimir un pedido ─────────────────────────────────────────────
+     En modo local:  POST /api/imprimir-ticket → PowerShell → POS-58
+     En modo cloud:  aviso (la impresión ocurre en la PC de cocina)    */
   const imprimirComanda = useCallback(async (pedido: PedidoConItems, silent = false) => {
-    const bytes = buildTicketBytes(pedido)
-    const ok = await printer.imprimir(bytes)
+    if (printerMode === 'cloud') {
+      if (!silent) toast.info('Esta PC no tiene acceso a la impresora.\nAbre esta página en localhost en la PC de cocina.')
+      return
+    }
+    const ok = await imprimirViaApi(pedido, paperSize)
     if (ok) {
       if (!silent) toast.success('✓ Ticket impreso')
     } else {
-      toast.error('⚠️ Impresora no conectada — haz clic en "Conectar impresora"')
+      if (!silent) toast.error('Error al imprimir — revisa que el servidor local esté corriendo')
     }
-  }, [printer])
+  }, [printerMode, paperSize])
 
   /* ── Auto-imprimir pedidos nuevos (estado 'pendiente') ─────────────── */
   const autoImprimir = useCallback((lista: PedidoConItems[]) => {
@@ -222,52 +210,39 @@ export function KdsClient({ pedidosIniciales, tenantId }: Props) {
           <Badge variant="secondary">{pedidos.length} pedidos activos</Badge>
         </div>
 
-        {/* Indicador y botón de impresora */}
+        {/* Indicador de modo de impresión */}
         <div className="flex items-center gap-2">
-          {printer.status === 'checking' && (
-            <span className="text-xs text-muted-foreground">Verificando impresora…</span>
+          {printerMode === 'checking' && (
+            <span className="text-xs text-muted-foreground">Detectando modo…</span>
           )}
-
-          {printer.status === 'connected' && (
-            <>
-              <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Impresora conectada
-              </span>
-              <button
-                onClick={printer.desconectar}
-                className="text-xs text-muted-foreground hover:text-red-500 underline"
-              >
-                Desconectar
-              </button>
-            </>
+          {printerMode === 'local' && (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Modo local — impresión directa
+            </span>
           )}
-
-          {printer.status === 'disconnected' && (
-            <Button size="sm" variant="outline" onClick={printer.conectar} className="gap-2">
-              🖨️ Conectar impresora
-            </Button>
+          {printerMode === 'cloud' && (
+            <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Modo nube — solo visualización
+            </span>
           )}
         </div>
       </div>
 
-      {/* Banner de primera configuración */}
-      {printer.status === 'disconnected' && printer.supported && (
-        <div className="mb-4 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-700 dark:text-amber-300 flex items-center justify-between gap-4">
-          <span>
-            <strong>Impresora no conectada.</strong> Haz clic en "Conectar impresora" y elige el puerto COM de la POS-58.
-            Chrome recordará la conexión para siempre.
-          </span>
-          <Button size="sm" onClick={printer.conectar} className="shrink-0 bg-amber-600 hover:bg-amber-500 text-white">
-            Conectar ahora
-          </Button>
-        </div>
-      )}
-
-      {!printer.supported && (
-        <div className="mb-4 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-sm text-blue-700 dark:text-blue-300">
-          ℹ️ Para impresión directa usa <strong>Chrome en la PC de cocina</strong> (conectada a la POS-58).
-          Los tickets se generan automáticamente con cada pedido nuevo.
+      {/* Banner modo nube */}
+      {printerMode === 'cloud' && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-sm text-blue-700 dark:text-blue-300 space-y-1">
+          <p className="font-semibold">📱 Esta es la vista de tablets / nube</p>
+          <p>
+            Para impresión automática sin diálogos, la <strong>PC de cocina</strong> debe abrir esta página en modo local:
+          </p>
+          <ol className="list-decimal list-inside space-y-0.5 ml-2">
+            <li>En la PC con la impresora: abre una terminal</li>
+            <li>Ejecuta <code className="bg-blue-500/20 px-1 rounded">pnpm start</code> (o <code className="bg-blue-500/20 px-1 rounded">pnpm dev</code>)</li>
+            <li>Abre Chrome en <code className="bg-blue-500/20 px-1 rounded">http://localhost:3000/cocina</code></li>
+          </ol>
+          <p className="text-xs opacity-75 mt-1">Los pedidos llegan en tiempo real desde Supabase e imprimen automáticamente en la POS-58.</p>
         </div>
       )}
 
