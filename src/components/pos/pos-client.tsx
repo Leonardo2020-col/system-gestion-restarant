@@ -1,6 +1,5 @@
 'use client'
 import { useState, useRef } from 'react'
-import jsPDF from 'jspdf'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -119,110 +118,21 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
     setTicketOpen(true)
   }
 
-  function imprimirTicket() {
+  async function imprimirTicket() {
     if (!ticketData) return
-
-    const is80 = paperSize === '80mm'
-    const W    = is80 ? 80 : 58   // mm — ancho exacto del papel
-    const MAR  = 3                 // mm — margen izquierdo/derecho
-    const CW   = W - MAR * 2      // mm — área útil de contenido
-
-    /* Tamaños de fuente en pt (unidad absoluta; jsPDF los convierte a mm) */
-    const FT = is80 ? 10 : 9    // título
-    const FS = is80 ?  8 : 7    // base / pie
-    const FN = is80 ?  9 : 8    // nombre plato
-    const FA = is80 ?  7 : 6    // observación
-
-    /* ── Calcular alto total del PDF ────────────────────────────────────
-       jsPDF usa mm. Sabemos cuántas líneas habrá, estimamos el espacio. */
-    const ptToMm = (pt: number) => pt * 0.353
-    const LH     = (pt: number) => ptToMm(pt) * 1.5   // line-height en mm
-
-    let H = MAR
-    H += LH(FT) + 0.5   // título
-    H += LH(FS) + 1      // subtítulo
-    H += 2               // separador cabecera
-    ticketData.items.forEach((it) => {
-      H += LH(FN) + 1    // línea de plato
-      if (it.notas) H += LH(FA) + 1  // observación
-      H += 1             // separador ítem
-    })
-    H += 2 + LH(FS) + MAR   // pie
-
-    /* ── Crear el PDF con dimensiones EXACTAS ─────────────────────────── */
-    const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
-    doc.setFont('courier')
-
-    let y = MAR
-
-    /* Título */
-    doc.setFontSize(FT)
-    doc.setFont('courier', 'bold')
-    doc.text(ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA', W / 2, y + LH(FT), { align: 'center' })
-    y += LH(FT) + 0.5
-
-    /* Subtítulo */
-    doc.setFontSize(FS)
-    doc.setFont('courier', 'normal')
-    doc.text(
-      `${ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA'}  ${ticketData.hora}`,
-      W / 2, y + LH(FS), { align: 'center' }
-    )
-    y += LH(FS) + 1
-
-    /* Separador cabecera (línea continua) */
-    doc.setDrawColor(0)
-    doc.setLineWidth(0.4)
-    doc.line(MAR, y, W - MAR, y)
-    y += 2
-
-    /* Ítems */
-    ticketData.items.forEach((item) => {
-      /* Cantidad + nombre */
-      doc.setFontSize(FN)
-      doc.setFont('courier', 'bold')
-      const lineas = doc.splitTextToSize(`${item.cantidad}x  ${item.nombre}`, CW)
-      doc.text(lineas, MAR, y + LH(FN))
-      y += LH(FN) * lineas.length + 0.5
-
-      /* Observación con fondo negro */
-      if (item.notas) {
-        doc.setFontSize(FA)
-        const notaTxt = `! ${item.notas}`
-        const notaW   = Math.min(doc.getTextWidth(notaTxt) + 3, CW)
-        const notaH   = LH(FA) + 0.5
-        doc.setFillColor(0, 0, 0)
-        doc.rect(MAR, y, notaW, notaH, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.text(notaTxt, MAR + 1.5, y + LH(FA))
-        doc.setTextColor(0, 0, 0)
-        y += notaH + 0.5
-      }
-
-      /* Separador ítem (línea punteada) */
-      doc.setLineDashPattern([0.8, 0.8], 0)
-      doc.setDrawColor(120)
-      doc.setLineWidth(0.2)
-      doc.line(MAR, y, W - MAR, y)
-      doc.setLineDashPattern([], 0)
-      doc.setDrawColor(0)
-      y += 1.5
-    })
-
-    /* Pie */
-    y += 0.5
-    doc.setLineWidth(0.3)
-    doc.line(MAR, y, W - MAR, y)
-    y += 1.5
-    doc.setFontSize(FS - 1)
-    doc.setFont('courier', 'normal')
-    doc.setTextColor(80)
-    doc.text(new Date().toLocaleDateString('es-PE'), W / 2, y + LH(FS - 1), { align: 'center' })
-
-    /* ── Abrir PDF → el browser lanza automáticamente el diálogo de impresión */
-    doc.autoPrint()
-    const blob = doc.output('bloburl')
-    window.open(blob as unknown as string, '_blank')
+    try {
+      const res = await fetch('/api/imprimir-ticket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...ticketData, paperSize }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error ?? 'Error al imprimir')
+      toast.success('Ticket enviado a la impresora ✓')
+      setTicketOpen(false)
+    } catch (err) {
+      toast.error('Error: ' + (err instanceof Error ? err.message : String(err)))
+    }
   }
 
   /* ── Enviar a cocina ── */
