@@ -1,5 +1,7 @@
 'use client'
 import { useState, useRef } from 'react'
+import { buildEscPos, toBase64 } from '@/lib/escpos'
+import jsPDF from 'jspdf'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -120,19 +122,99 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
 
   async function imprimirTicket() {
     if (!ticketData) return
+
+    const escBytes = buildEscPos({ ...ticketData, paperSize })
+
+    /* ── Intento 1: QZ Tray (impresión directa sin diálogo) ─────────────
+       Requiere QZ Tray instalado en la PC: https://qz.io/download/      */
     try {
-      const res = await fetch('/api/imprimir-ticket', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...ticketData, paperSize }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error ?? 'Error al imprimir')
-      toast.success('Ticket enviado a la impresora ✓')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const qz = (await import('qz-tray')).default as any
+
+      if (!qz.websocket.isActive()) {
+        await qz.websocket.connect({ host: 'localhost', port: { secure: [8181], insecure: [8182] } })
+      }
+
+      const config = qz.configs.create(paperSize === '80mm' ? 'POS-80' : 'POS-58')
+      await qz.print(config, [{ type: 'raw', format: 'base64', data: toBase64(escBytes) }])
+
+      toast.success('✓ Ticket enviado a la impresora')
       setTicketOpen(false)
-    } catch (err) {
-      toast.error('Error: ' + (err instanceof Error ? err.message : String(err)))
+      return
+    } catch {
+      /* QZ Tray no disponible → usar PDF como fallback */
     }
+
+    /* ── Fallback: PDF con jsPDF ─────────────────────────────────────────
+       Genera un PDF de 58×H mm. Al abrirlo en Adobe Reader o Edge,
+       imprime correctamente en papel térmico.                            */
+    const is80 = paperSize === '80mm'
+    const W = is80 ? 80 : 58
+    const MAR = 3
+    const CW = W - MAR * 2
+    const FT = is80 ? 10 : 9
+    const FS = is80 ? 8 : 7
+    const FN = is80 ? 9 : 8
+    const FA = is80 ? 7 : 6
+    const lh = (pt: number) => pt * 0.353 * 1.5
+
+    let H = MAR
+    H += lh(FT) + 0.5
+    H += lh(FS) + 1
+    H += 2
+    ticketData.items.forEach((it) => {
+      H += lh(FN) + 1
+      if (it.notas) H += lh(FA) + 1
+      H += 1
+    })
+    H += 2 + lh(FS) + MAR
+
+    const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
+    let y = MAR
+
+    doc.setFont('courier', 'bold')
+    doc.setFontSize(FT)
+    doc.text(ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA', W / 2, y + lh(FT), { align: 'center' })
+    y += lh(FT) + 0.5
+
+    doc.setFont('courier', 'normal')
+    doc.setFontSize(FS)
+    doc.text(`${ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA'}  ${ticketData.hora}`, W / 2, y + lh(FS), { align: 'center' })
+    y += lh(FS) + 1
+
+    doc.setDrawColor(0); doc.setLineWidth(0.4)
+    doc.line(MAR, y, W - MAR, y); y += 2
+
+    ticketData.items.forEach((item) => {
+      doc.setFont('courier', 'bold'); doc.setFontSize(FN)
+      const lines = doc.splitTextToSize(`${item.cantidad}x  ${item.nombre}`, CW)
+      doc.text(lines, MAR, y + lh(FN))
+      y += lh(FN) * lines.length + 0.5
+
+      if (item.notas) {
+        doc.setFontSize(FA)
+        const nw = Math.min(doc.getTextWidth(`! ${item.notas}`) + 3, CW)
+        const nh = lh(FA) + 0.5
+        doc.setFillColor(0, 0, 0)
+        doc.rect(MAR, y, nw, nh, 'F')
+        doc.setTextColor(255, 255, 255)
+        doc.text(`! ${item.notas}`, MAR + 1.5, y + lh(FA))
+        doc.setTextColor(0, 0, 0)
+        y += nh + 0.5
+      }
+
+      doc.setLineDashPattern([0.8, 0.8], 0); doc.setDrawColor(120); doc.setLineWidth(0.2)
+      doc.line(MAR, y, W - MAR, y)
+      doc.setLineDashPattern([], 0); doc.setDrawColor(0); y += 1.5
+    })
+
+    y += 0.5; doc.setLineWidth(0.3); doc.line(MAR, y, W - MAR, y); y += 1.5
+    doc.setFontSize(FS - 1); doc.setFont('courier', 'normal'); doc.setTextColor(80)
+    doc.text(new Date().toLocaleDateString('es-PE'), W / 2, y + lh(FS - 1), { align: 'center' })
+
+    /* Descargar el PDF — el usuario lo abre en su visor y lo imprime */
+    doc.save(`comanda${ticketData.mesa ? '-mesa-' + ticketData.mesa : ''}.pdf`)
+    toast.info('📄 PDF descargado. Ábrelo e imprime desde Adobe Reader o Edge para resultado correcto.', { duration: 6000 })
   }
 
   /* ── Enviar a cocina ── */

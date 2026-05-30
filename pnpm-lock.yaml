@@ -14,6 +14,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.76.0(react@19.2.4))
+      '@point-of-sale/receipt-printer-encoder':
+        specifier: ^3.0.3
+        version: 3.0.3
       '@react-email/components':
         specifier: ^1.0.12
         version: 1.0.12(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -50,6 +53,9 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      qz-tray:
+        specifier: ^2.2.6
+        version: 2.2.6
       react:
         specifier: 19.2.4
         version: 19.2.4
@@ -265,6 +271,9 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
+
+  '@canvas/image-data@1.1.0':
+    resolution: {integrity: sha512-QdObRRjRbcXGmM1tmJ+MrHcaz1MftF2+W7YI+MsphnsCrmtyfS0d5qJbk0MeSbUeyM/jCb0hmnkXPsy026L7dA==}
 
   '@dotenvx/dotenvx@1.66.0':
     resolution: {integrity: sha512-qlQFhHUjhRDybrinqLAD0MClVZDOrsq80O8eD5iSjz3Qa/4f3Jg7SQrOaSobrRyP1QaWIYLGtGpj2c7H0D8NUw==}
@@ -613,6 +622,12 @@ packages:
 
   '@open-draft/until@2.1.0':
     resolution: {integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==}
+
+  '@point-of-sale/codepage-encoder@3.0.2':
+    resolution: {integrity: sha512-Sx+0sE/XgPtMUNKScHpwTIZiHNd/+Mg0udACQJVwPsxH9kUAgIkRi9kRlmWBMCruwOJadjKLyKs8MO8Bh+VS/A==}
+
+  '@point-of-sale/receipt-printer-encoder@3.0.3':
+    resolution: {integrity: sha512-2+xgs6rwNfrkEw9g4LkgQS6k29qnmo3+hOV7Z2xHNBFn8h4FrwquZwL/dBOTwgmQ9sWEYBkj/bQkg9Rz6lL99w==}
 
   '@react-email/body@0.3.0':
     resolution: {integrity: sha512-uGo0BOOzjbMUo3lu+BIDWayvn5o6Xyfmnlla5VGf05n8gHMvO1ll7U4FtzWe3hxMLwt53pmc4iE0M+B5slG+Ug==}
@@ -1077,6 +1092,12 @@ packages:
 
   caniuse-lite@1.0.30001793:
     resolution: {integrity: sha512-iwSsYWaCOoh26cV8NwNRViHlrfUvYsHDfRVcbtmw0Kg6PJIZZXwMkj1442FYLBGkeUf1juAsU3DTfxW579mrPA==}
+
+  canvas-dither@1.0.1:
+    resolution: {integrity: sha512-wT1RnV2y9SauibcsfMMCagQTnXmyQq2nJXuX5tTEvo0sXm1vVbJ2r8QxSC3fRQMY3ZgZVq1j54cOvmO4u+Lu/A==}
+
+  canvas-flatten@1.0.1:
+    resolution: {integrity: sha512-UhHeKeWGS23Bm5teZiHk6NEOme1OKCpv6arFovV89dydt0Xz+U4HkPXAKBZS/hmpR15x5U9tDj1ieMQMTwvCAA==}
 
   canvg@3.0.11:
     resolution: {integrity: sha512-5ON+q7jCTgMp9cjpu4Jo6XbvfYwSB2Ow3kzHKfIyJfaCAOHLbdKPQqGKgfED/R5B+3TFFfe8pegYA+b423SRyA==}
@@ -2043,6 +2064,9 @@ packages:
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
 
+  qz-tray@2.2.6:
+    resolution: {integrity: sha512-b9w0vcjHSdKiOq1jL/KXfb3IvgaIc/BeQv9JuJ3nTEoqSUZfIGKLAyKTS+akHSXrR64R0UwEDmw20GvD2di/Pg==}
+
   raf@3.4.1:
     resolution: {integrity: sha512-Sq4CW4QhwOHE8ucn6J34MqtZCeWFP2aQSmrlroYgqAV1PjStIhJXxYuTgUIfkEk7zTLjmIjLmU5q+fbD1NnOJA==}
 
@@ -2095,6 +2119,10 @@ packages:
     peerDependenciesMeta:
       '@react-email/render':
         optional: true
+
+  resize-image-data@0.3.1:
+    resolution: {integrity: sha512-6hVRn2S6W1cdycreA6Vth5XRN2NnGs7/RnVpxNw/1OCK8aCoevRFH2WprmQRZDnnH3e6awLv2tTIPuv7/7xeGg==}
+    engines: {node: '>=8.6.0'}
 
   resolve-from@4.0.0:
     resolution: {integrity: sha512-pb/MYmXstAkysRFx8piNI1tGFNQIFA3vkE3Gq4EuA1dF6gHp/+vgZqsCGJapvy8N3Q+4o7FwvquPJcnZ7RYy4g==}
@@ -2685,6 +2713,8 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
+  '@canvas/image-data@1.1.0': {}
+
   '@dotenvx/dotenvx@1.66.0':
     dependencies:
       commander: 11.1.0
@@ -2963,6 +2993,16 @@ snapshots:
       outvariant: 1.4.3
 
   '@open-draft/until@2.1.0': {}
+
+  '@point-of-sale/codepage-encoder@3.0.2': {}
+
+  '@point-of-sale/receipt-printer-encoder@3.0.3':
+    dependencies:
+      '@canvas/image-data': 1.1.0
+      '@point-of-sale/codepage-encoder': 3.0.2
+      canvas-dither: 1.0.1
+      canvas-flatten: 1.0.1
+      resize-image-data: 0.3.1
 
   '@react-email/body@0.3.0(react@19.2.4)':
     dependencies:
@@ -3348,6 +3388,10 @@ snapshots:
   callsites@3.1.0: {}
 
   caniuse-lite@1.0.30001793: {}
+
+  canvas-dither@1.0.1: {}
+
+  canvas-flatten@1.0.1: {}
 
   canvg@3.0.11:
     dependencies:
@@ -4225,6 +4269,8 @@ snapshots:
 
   queue-microtask@1.2.3: {}
 
+  qz-tray@2.2.6: {}
+
   raf@3.4.1:
     dependencies:
       performance-now: 2.1.0
@@ -4273,6 +4319,10 @@ snapshots:
       svix: 1.92.2
     optionalDependencies:
       '@react-email/render': 2.0.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+
+  resize-image-data@0.3.1:
+    dependencies:
+      '@canvas/image-data': 1.1.0
 
   resolve-from@4.0.0: {}
 
