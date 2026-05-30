@@ -121,58 +121,57 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
   function imprimirTicket() {
     if (!ticketData) return
 
-    // ── Canvas a 203 DPI (estándar térmico) ─────────────────────────────
-    // El driver recibe una imagen de exactamente los píxeles correctos,
-    // sin depender del tamaño de papel configurado en el navegador.
+    // ── Generamos el canvas en píxeles CSS exactos ────────────────────────
+    // 1 CSS px = 1/96 pulgada = 25.4/96 mm  →  1mm = 96/25.4 ≈ 3.78 px
+    // Así la imagen coincide 1:1 con los mm del papel sin ninguna escala.
     const is80    = paperSize === '80mm'
     const PAGE_MM = is80 ? 80 : 58
-    const MAR_MM  = 3
-    const DPI     = 203
-    const mm      = (v: number) => Math.round(v * DPI / 25.4)
+    const px      = (mm: number) => Math.round(mm * 96 / 25.4)   // mm → CSS px
 
-    const pageWpx    = mm(PAGE_MM)
-    const contentWpx = mm(PAGE_MM - MAR_MM * 2)
-    const mPx        = mm(MAR_MM)
+    const canvasW    = px(PAGE_MM)
+    const MAR_PX     = px(3)
+    const contentWpx = canvasW - MAR_PX * 2
 
-    /* Fuentes calibradas para que el texto quepa en el ancho real
-       58mm útil ≈ 415px / 80mm útil ≈ 592px                       */
-    const F_TITLE = is80 ? 22 : 18
-    const F_SUB   = is80 ? 16 : 13
-    const F_QTY   = is80 ? 22 : 18
-    const F_NAME  = is80 ? 18 : 15
-    const F_NOTA  = is80 ? 15 : 13
-    const F_FOOT  = is80 ? 13 : 11
-    const LH      = (f: number) => Math.round(f * 1.4)
-    const GAP     = mm(1)
+    // Fuentes proporcionales al ancho real del papel
+    const F_TITLE = is80 ? 13 : 11
+    const F_SUB   = is80 ? 10 :  8
+    const F_QTY   = is80 ? 13 : 11
+    const F_NAME  = is80 ? 11 :  9
+    const F_NOTA  = is80 ? 10 :  8
+    const F_FOOT  = is80 ?  9 :  7
+    const LH      = (f: number) => Math.round(f * 1.45)
+    const GAP     = px(1.2)
 
-    // Calcular altura total
-    let canvasH = mPx
-    canvasH += LH(F_TITLE) + GAP + LH(F_SUB) + mm(2) + mm(2)
+    // ── Altura total del canvas ──
+    let canvasH = MAR_PX
+    canvasH += LH(F_TITLE) + GAP
+    canvasH += LH(F_SUB) + px(1.5)
+    canvasH += px(2)   // separador cabecera
     ticketData.items.forEach((it) => {
       canvasH += LH(F_NAME) + GAP
       if (it.notas) canvasH += LH(F_NOTA) + GAP
-      canvasH += mm(1.5)
+      canvasH += px(1)   // separador ítem
     })
-    canvasH += mm(2) + LH(F_FOOT) + mPx
+    canvasH += px(2) + LH(F_FOOT) + MAR_PX
 
-    // Crear canvas
+    // ── Dibujar en canvas ──
     const canvas  = document.createElement('canvas')
-    canvas.width  = pageWpx
+    canvas.width  = canvasW
     canvas.height = canvasH
     const ctx     = canvas.getContext('2d')!
 
     ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, pageWpx, canvasH)
+    ctx.fillRect(0, 0, canvasW, canvasH)
     ctx.fillStyle = '#000000'
 
-    const left = mPx
-    let   cy   = mPx
+    const left = MAR_PX
+    let   cy   = MAR_PX
 
-    const dashedLine = (y: number, color = '#000000', thick = 2) => {
+    const dashedLine = (y: number, color = '#000000', lw = 1.5) => {
       ctx.save()
-      ctx.setLineDash([mm(2), mm(1.5)])
+      ctx.setLineDash([px(2), px(1.5)])
       ctx.strokeStyle = color
-      ctx.lineWidth   = thick
+      ctx.lineWidth   = lw
       ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + contentWpx, y); ctx.stroke()
       ctx.restore()
     }
@@ -183,60 +182,64 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
     ctx.fillText(ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA', left + contentWpx / 2, cy + F_TITLE)
     cy += LH(F_TITLE) + GAP
 
-    // Subtítulo
+    // Subtítulo (mesa + hora)
     ctx.font = `${F_SUB}px "Courier New", monospace`
     ctx.fillText(
-      (ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA') + '  ' + ticketData.hora,
+      `${ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA'}  ${ticketData.hora}`,
       left + contentWpx / 2, cy + F_SUB
     )
-    cy += LH(F_SUB) + mm(2)
+    cy += LH(F_SUB) + px(1.5)
 
-    dashedLine(cy, '#000000', 3)
-    cy += mm(3)
+    dashedLine(cy, '#000000', 2)
+    cy += px(2.5)
 
     // Ítems
     ctx.textAlign = 'left'
     ticketData.items.forEach((item) => {
       ctx.fillStyle = '#000000'
+
+      // Cantidad
       ctx.font = `bold ${F_QTY}px "Courier New", monospace`
-      const qtyStr = item.cantidad + 'x'
-      const qtyW   = ctx.measureText(qtyStr).width + mm(2)
+      const qtyStr = `${item.cantidad}x`
+      const qtyW   = ctx.measureText(qtyStr).width + px(1.5)
       ctx.fillText(qtyStr, left, cy + F_QTY)
 
+      // Nombre
       ctx.font = `bold ${F_NAME}px "Courier New", monospace`
       ctx.fillText(item.nombre, left + qtyW, cy + F_QTY - (F_QTY - F_NAME) / 2)
       cy += LH(F_NAME) + GAP
 
+      // Observación (fondo negro)
       if (item.notas) {
-        const txt   = '!  ' + item.notas
+        const txt   = `! ${item.notas}`
         ctx.font    = `bold ${F_NOTA}px "Courier New", monospace`
-        const noteW = ctx.measureText(txt).width + mm(4)
+        const noteW = Math.min(ctx.measureText(txt).width + px(3), contentWpx)
         const noteH = LH(F_NOTA)
         ctx.fillStyle = '#000000'
-        ctx.fillRect(left + mm(2), cy, noteW, noteH)
+        ctx.fillRect(left + px(1), cy, noteW, noteH)
         ctx.fillStyle = '#ffffff'
-        ctx.fillText(txt, left + mm(4), cy + F_NOTA)
+        ctx.fillText(txt, left + px(2.5), cy + F_NOTA)
         ctx.fillStyle = '#000000'
         cy += noteH + GAP
       }
 
-      dashedLine(cy, '#888888', 1.5)
-      cy += mm(2.5)
+      dashedLine(cy, '#777777', 1)
+      cy += px(1.5)
     })
 
     // Pie
-    cy += mm(1)
-    dashedLine(cy)
-    cy += mm(2)
+    cy += px(1)
+    dashedLine(cy, '#000000', 1.5)
+    cy += px(1.5)
     ctx.textAlign = 'center'
     ctx.font      = `${F_FOOT}px "Courier New", monospace`
-    ctx.fillStyle = '#444444'
+    ctx.fillStyle = '#555555'
     ctx.fillText(new Date().toLocaleDateString('es-PE'), left + contentWpx / 2, cy + F_FOOT)
 
-    // Convertir a imagen e imprimir via iframe
+    // ── Imprimir via iframe ──────────────────────────────────────────────
+    // La altura en mm se calcula proporcional al canvas (mismo ratio que CSS px)
+    const pageHmm = (canvasH * 25.4 / 96).toFixed(2)
     const imgData = canvas.toDataURL('image/png')
-    // Altura exacta en mm según el canvas (sin redondeo extra)
-    const pageHmm = (canvasH / DPI * 25.4).toFixed(2)
 
     const iframe = document.createElement('iframe')
     iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;'
@@ -250,8 +253,8 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
 <style>
   @page { size: ${PAGE_MM}mm ${pageHmm}mm; margin: 0; }
   * { margin: 0; padding: 0; }
-  body { background: #fff; width: ${PAGE_MM}mm; }
-  img  { display: block; width: 100%; height: auto; }
+  html, body { width: ${PAGE_MM}mm; background: #fff; }
+  img { display: block; width: ${PAGE_MM}mm; height: auto; }
 </style></head>
 <body><img src="${imgData}"/></body></html>`)
     doc.close()
