@@ -1,10 +1,11 @@
 'use client'
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useKdsRealtime } from '@/hooks/useKdsRealtime'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder'
@@ -24,22 +25,20 @@ const estadoNext = {
 const estadoColor: Record<string, string> = {
   pendiente: 'bg-yellow-500/20 border-yellow-500',
   preparando: 'bg-blue-500/20 border-blue-500',
-  listo: 'bg-emerald-500/20 border-emerald-500',
+  listo:      'bg-emerald-500/20 border-emerald-500',
 }
-
 const estadoBadge: Record<string, string> = {
   pendiente: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300',
   preparando: 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
-  listo: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300',
+  listo:      'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300',
 }
 
-/* ── Generar bytes ESC/POS del ticket ──────────────────────────────────── */
+/* ── Construir bytes ESC/POS ──────────────────────────────────────────── */
 function buildTicketBytes(pedido: PedidoConItems, cols = 32): Uint8Array {
   const encoder = new ReceiptPrinterEncoder({
-    language:         'esc-pos',
-    columns:          cols,
-    feedBeforeCut:    4,
-    autoFlush:        true,
+    language:    'esc-pos',
+    columns:     cols,
+    autoFlush:   true,
   })
 
   const mesa = pedido.mesa
@@ -53,7 +52,7 @@ function buildTicketBytes(pedido: PedidoConItems, cols = 32): Uint8Array {
     .align('center')
     .bold(true)
     .size(2, 2)
-    .line(pedido.tipo === 'salon' || pedido.mesa ? 'COMANDA' : '++ PEDIDO')
+    .line('COMANDA')
     .size(1, 1)
     .bold(false)
     .line(`${mesa}  ${hora}`)
@@ -61,144 +60,88 @@ function buildTicketBytes(pedido: PedidoConItems, cols = 32): Uint8Array {
     .align('left')
 
   for (const item of pedido.items ?? []) {
-    enc = enc
-      .bold(true)
-      .line(`${item.cantidad}x  ${item.producto?.nombre ?? '—'}`)
-      .bold(false)
-
-    if (item.notas) {
-      enc = enc.invert(true).line(` ! ${item.notas} `).invert(false)
-    }
-
+    enc = enc.bold(true).line(`${item.cantidad}x  ${item.producto?.nombre ?? '—'}`).bold(false)
+    if (item.notas) enc = enc.invert(true).line(` ! ${String(item.notas)} `).invert(false)
     enc = enc.rule({ style: 'single' })
   }
 
-  enc = enc
+  return enc
     .align('center')
     .line(new Date().toLocaleDateString('es-PE'))
     .newline()
     .cut('partial')
-
-  return enc.encode()
+    .encode()
 }
 
-/* ── Imprimir por WebUSB (si la impresora lo soporta) o WebSerial ──────── */
-async function imprimirPorApi(bytes: Uint8Array): Promise<'usb' | 'serial' | 'pdf'> {
+/* ── Hook de WebSerial (puerto persistente) ───────────────────────────── */
+function useSerialPrinter() {
+  const portRef   = useRef<SerialPort | null>(null)
+  const [status, setStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
+  const supported = typeof navigator !== 'undefined' && 'serial' in navigator
 
-  /* Intento 1 – WebUSB (Chrome en Android/PC si el driver lo expone) */
-  if ('usb' in navigator) {
-    try {
-      const device = await (navigator as any).usb.requestDevice({
-        filters: [
-          { vendorId: 0x04b8 },  // Epson
-          { vendorId: 0x0519 },  // Star
-          { vendorId: 0x154f },  // POS genérico
-          { vendorId: 0x0dd4 },  // Custom
-          { vendorId: 0x1fc9 },  // Generic thermal
-          {},                     // cualquier impresora
-        ],
+  /* Al montar: recuperar puerto previamente autorizado */
+  useEffect(() => {
+    if (!supported) { setStatus('disconnected'); return }
+    ;(navigator as any).serial.getPorts()
+      .then((ports: SerialPort[]) => {
+        if (ports.length > 0) { portRef.current = ports[0]; setStatus('connected') }
+        else setStatus('disconnected')
       })
-      await device.open()
-      if (device.configuration === null) await device.selectConfiguration(1)
-      const iface = device.configuration!.interfaces.find(
-        (i: any) => i.alternate.interfaceClass === 7  /* Printer class */
-          || i.alternate.endpoints.some((e: any) => e.direction === 'out')
-      )
-      if (iface) {
-        await device.claimInterface(iface.interfaceNumber)
-        const ep = iface.alternate.endpoints.find((e: any) => e.direction === 'out')
-        if (ep) {
-          await device.transferOut(ep.endpointNumber, bytes)
-          await device.close()
-          return 'usb'
-        }
-      }
-    } catch { /* WebUSB no disponible o cancelado por el usuario */ }
-  }
+      .catch(() => setStatus('disconnected'))
+  }, [supported])
 
-  /* Intento 2 – WebSerial (Chrome en PC, la impresora aparece como COM) */
-  if ('serial' in navigator) {
+  /* Primera conexión: el usuario elige el puerto COM */
+  const conectar = useCallback(async () => {
+    if (!supported) { toast.error('Usa Chrome en PC para WebSerial'); return }
     try {
-      const port = await (navigator as any).serial.requestPort()
-      await port.open({ baudRate: 9600 })
-      const writer = port.writable.getWriter()
-      await writer.write(bytes)
+      const port: SerialPort = await (navigator as any).serial.requestPort()
+      portRef.current = port
+      setStatus('connected')
+      toast.success('Impresora conectada ✓ — permanecerá vinculada')
+    } catch {
+      toast.error('Conexión cancelada o puerto no encontrado')
+    }
+  }, [supported])
+
+  /* Desconectar */
+  const desconectar = useCallback(async () => {
+    if (portRef.current) {
+      try { await (portRef.current as any).forget?.() } catch {}
+      portRef.current = null
+    }
+    setStatus('disconnected')
+  }, [])
+
+  /* Enviar bytes al puerto abierto → imprimir */
+  const imprimir = useCallback(async (bytes: Uint8Array): Promise<boolean> => {
+    const port = portRef.current
+    if (!port) return false
+    try {
+      if (!(port as any).readable) await port.open({ baudRate: 9600 })
+      const writer = port.writable!.getWriter()
+      // Enviar en trozos de 512 bytes
+      for (let i = 0; i < bytes.length; i += 512) {
+        await writer.write(bytes.slice(i, i + 512))
+      }
       writer.releaseLock()
       await port.close()
-      return 'serial'
-    } catch { /* WebSerial no disponible o cancelado */ }
-  }
-
-  return 'pdf'
-}
-
-/* ── Fallback: abrir ventana de impresión con jsPDF ───────────────────── */
-async function imprimirConPdf(pedido: PedidoConItems) {
-  const { default: jsPDF } = await import('jspdf')
-  const W = 58, MAR = 3, CW = W - MAR * 2
-  const lh = (pt: number) => pt * 0.353 * 1.5
-
-  let H = MAR
-  H += lh(9) + 0.5 + lh(7) + 1 + 2
-  ;(pedido.items ?? []).forEach((it) => {
-    H += lh(8) + 1
-    if (it.notas) H += lh(7) + 1
-    H += 1
-  })
-  H += 2 + lh(7) + MAR
-
-  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
-  const mesa = pedido.mesa ? `MESA ${pedido.mesa.numero}` : pedido.tipo === 'llevar' ? 'PARA LLEVAR' : 'DELIVERY'
-  const hora = format(new Date(pedido.created_at), 'HH:mm', { locale: es })
-  let y = MAR
-
-  doc.setFont('courier', 'bold'); doc.setFontSize(9)
-  doc.text('COMANDA', W / 2, y + lh(9), { align: 'center' }); y += lh(9) + 0.5
-  doc.setFont('courier', 'normal'); doc.setFontSize(7)
-  doc.text(`${mesa}  ${hora}`, W / 2, y + lh(7), { align: 'center' }); y += lh(7) + 1
-  doc.setLineWidth(0.4); doc.line(MAR, y, W - MAR, y); y += 2
-
-  ;(pedido.items ?? []).forEach((item) => {
-    doc.setFont('courier', 'bold'); doc.setFontSize(8)
-    const lines = doc.splitTextToSize(`${item.cantidad}x  ${item.producto?.nombre ?? '—'}`, CW)
-    doc.text(lines, MAR, y + lh(8)); y += lh(8) * lines.length + 0.5
-    if (item.notas) {
-      doc.setFontSize(7)
-      const nw = Math.min(doc.getTextWidth(`! ${item.notas}`) + 3, CW)
-      const nh = lh(7) + 0.5
-      doc.setFillColor(0, 0, 0); doc.rect(MAR, y, nw, nh, 'F')
-      doc.setTextColor(255); doc.text(`! ${item.notas}`, MAR + 1.5, y + lh(7))
-      doc.setTextColor(0); y += nh + 0.5
+      return true
+    } catch (err) {
+      console.error('[serial]', err)
+      try { await port.close() } catch {}
+      return false
     }
-    doc.setLineDashPattern([0.8, 0.8], 0); doc.setDrawColor(120); doc.setLineWidth(0.2)
-    doc.line(MAR, y, W - MAR, y); doc.setLineDashPattern([], 0); doc.setDrawColor(0); y += 1.5
-  })
+  }, [])
 
-  y += 0.5; doc.setLineWidth(0.3); doc.line(MAR, y, W - MAR, y); y += 1.5
-  doc.setFontSize(6); doc.setFont('courier', 'normal'); doc.setTextColor(80)
-  doc.text(new Date().toLocaleDateString('es-PE'), W / 2, y + lh(6), { align: 'center' })
-
-  doc.save(`comanda-${mesa.replace(/\s/g, '-')}.pdf`)
-}
-
-/* ── Función principal de impresión ────────────────────────────────────── */
-async function imprimirComanda(pedido: PedidoConItems, silent = false) {
-  const bytes = buildTicketBytes(pedido)
-  const method = await imprimirPorApi(bytes)
-
-  if (method === 'usb')    { if (!silent) toast.success('✓ Impreso por USB'); return }
-  if (method === 'serial') { if (!silent) toast.success('✓ Impreso por Serial/COM'); return }
-
-  /* Fallback PDF */
-  await imprimirConPdf(pedido)
-  if (!silent) toast.info('📄 PDF descargado — ábrelo e imprímelo desde Adobe Reader o Edge')
+  return { status, conectar, desconectar, imprimir, supported }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
 export function KdsClient({ pedidosIniciales, tenantId }: Props) {
   const queryClient = useQueryClient()
-  const supabase = createClient()
+  const supabase    = createClient()
   const impresosRef = useRef<Set<string>>(new Set())
+  const printer     = useSerialPrinter()
 
   useKdsRealtime(tenantId)
 
@@ -222,161 +165,209 @@ export function KdsClient({ pedidosIniciales, tenantId }: Props) {
     initialData: pedidosIniciales,
   })
 
-  /* ── Auto-imprimir pedidos nuevos ─────────────────────────────────────
-     Cuando llega un pedido 'pendiente' que aún no hemos impreso,
-     lo imprimimos automáticamente (modo silencioso).                     */
+  /* ── Imprimir un pedido ────────────────────────────────────────────── */
+  const imprimirComanda = useCallback(async (pedido: PedidoConItems, silent = false) => {
+    const bytes = buildTicketBytes(pedido)
+    const ok = await printer.imprimir(bytes)
+    if (ok) {
+      if (!silent) toast.success('✓ Ticket impreso')
+    } else {
+      toast.error('⚠️ Impresora no conectada — haz clic en "Conectar impresora"')
+    }
+  }, [printer])
+
+  /* ── Auto-imprimir pedidos nuevos (estado 'pendiente') ─────────────── */
   const autoImprimir = useCallback((lista: PedidoConItems[]) => {
     lista
       .filter((p) => p.estado === 'pendiente' && !impresosRef.current.has(p.id))
       .forEach((p) => {
         impresosRef.current.add(p.id)
         imprimirComanda(p, true)
-          .catch(() => { /* silencioso */ })
       })
-  }, [])
+  }, [imprimirComanda])
 
   useEffect(() => {
     if (pedidos.length > 0) autoImprimir(pedidos)
   }, [pedidos, autoImprimir])
 
+  /* ── Mutaciones ────────────────────────────────────────────────────── */
   const avanzar = useMutation({
     mutationFn: async (pedidoId: string) => {
       const pedido = pedidos.find((p) => p.id === pedidoId)
       if (!pedido) return
       const nuevoEstado = estadoNext[pedido.estado as keyof typeof estadoNext]
       if (!nuevoEstado) return
-      const { error } = await supabase
-        .from('pedidos')
-        .update({ estado: nuevoEstado })
-        .eq('id', pedidoId)
+      const { error } = await supabase.from('pedidos').update({ estado: nuevoEstado }).eq('id', pedidoId)
       if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pedidos', tenantId] }),
-    onError: () => toast.error('Error al actualizar estado'),
+    onError:   () => toast.error('Error al actualizar estado'),
   })
 
   const avanzarItem = useMutation({
     mutationFn: async ({ itemId, estado }: { itemId: string; estado: string }) => {
-      const { error } = await supabase
-        .from('pedido_items')
-        .update({ estado })
-        .eq('id', itemId)
+      const { error } = await supabase.from('pedido_items').update({ estado }).eq('id', itemId)
       if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pedidos', tenantId] }),
   })
 
-  if (pedidos.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-muted-foreground">
-        <span className="text-6xl mb-4">🍳</span>
-        <p className="text-xl">Sin pedidos pendientes</p>
-        <p className="text-sm mt-1">Los nuevos pedidos aparecerán aquí en tiempo real</p>
-      </div>
-    )
-  }
-
+  /* ── UI ────────────────────────────────────────────────────────────── */
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-foreground text-2xl font-bold">Cocina</h1>
-        <Badge variant="secondary">{pedidos.length} pedidos activos</Badge>
+      {/* Header con estado de impresora */}
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-foreground text-2xl font-bold">Cocina</h1>
+          <Badge variant="secondary">{pedidos.length} pedidos activos</Badge>
+        </div>
+
+        {/* Indicador y botón de impresora */}
+        <div className="flex items-center gap-2">
+          {printer.status === 'checking' && (
+            <span className="text-xs text-muted-foreground">Verificando impresora…</span>
+          )}
+
+          {printer.status === 'connected' && (
+            <>
+              <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Impresora conectada
+              </span>
+              <button
+                onClick={printer.desconectar}
+                className="text-xs text-muted-foreground hover:text-red-500 underline"
+              >
+                Desconectar
+              </button>
+            </>
+          )}
+
+          {printer.status === 'disconnected' && (
+            <Button size="sm" variant="outline" onClick={printer.conectar} className="gap-2">
+              🖨️ Conectar impresora
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {pedidos.map((pedido) => {
-          const estado = pedido.estado
-          const minutosTranscurridos = Math.floor(
-            (Date.now() - new Date(pedido.created_at).getTime()) / 60000
-          )
-          const esUrgente = minutosTranscurridos >= 15
+      {/* Banner de primera configuración */}
+      {printer.status === 'disconnected' && printer.supported && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-700 dark:text-amber-300 flex items-center justify-between gap-4">
+          <span>
+            <strong>Impresora no conectada.</strong> Haz clic en "Conectar impresora" y elige el puerto COM de la POS-58.
+            Chrome recordará la conexión para siempre.
+          </span>
+          <Button size="sm" onClick={printer.conectar} className="shrink-0 bg-amber-600 hover:bg-amber-500 text-white">
+            Conectar ahora
+          </Button>
+        </div>
+      )}
 
-          return (
-            <div
-              key={pedido.id}
-              className={`rounded-xl border-2 p-4 flex flex-col gap-3 ${estadoColor[estado] ?? estadoColor.pendiente}`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-foreground font-bold text-lg">
-                      {pedido.mesa
-                        ? `Mesa ${pedido.mesa.numero}`
-                        : pedido.tipo === 'llevar'
-                        ? 'Para llevar'
-                        : 'Delivery'}
-                    </span>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${estadoBadge[estado] ?? estadoBadge.pendiente}`}>
-                      {estado.charAt(0).toUpperCase() + estado.slice(1)}
-                    </span>
-                  </div>
-                  <p className={`text-xs mt-0.5 ${esUrgente ? 'text-red-600 dark:text-red-400 font-bold' : 'text-muted-foreground'}`}>
-                    {esUrgente ? '⚠️ ' : ''}
-                    {minutosTranscurridos}min · {format(new Date(pedido.created_at), 'HH:mm', { locale: es })}
-                  </p>
-                </div>
+      {!printer.supported && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-sm text-blue-700 dark:text-blue-300">
+          ℹ️ Para impresión directa usa <strong>Chrome en la PC de cocina</strong> (conectada a la POS-58).
+          Los tickets se generan automáticamente con cada pedido nuevo.
+        </div>
+      )}
 
-                {/* Botón imprimir manual */}
-                <button
-                  onClick={() => imprimirComanda(pedido)}
-                  title="Reimprimir ticket"
-                  className="text-lg hover:scale-110 transition-transform shrink-0"
-                >
-                  🖨️
-                </button>
-              </div>
+      {/* Tarjetas de pedidos */}
+      {pedidos.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-[60vh] text-muted-foreground">
+          <span className="text-6xl mb-4">🍳</span>
+          <p className="text-xl">Sin pedidos pendientes</p>
+          <p className="text-sm mt-1">Los nuevos pedidos aparecerán aquí en tiempo real</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {pedidos.map((pedido) => {
+            const estado = pedido.estado
+            const mins   = Math.floor((Date.now() - new Date(pedido.created_at).getTime()) / 60000)
+            const urgent = mins >= 15
 
-              <ul className="space-y-2">
-                {pedido.items?.map((item) => {
-                  const itemEstado = item.estado
-                  const isListo = itemEstado === 'listo' || itemEstado === 'entregado'
-                  return (
-                    <li key={item.id} className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          avanzarItem.mutate({ itemId: item.id, estado: isListo ? 'pendiente' : 'listo' })
-                        }
-                        className={`w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${
-                          isListo ? 'bg-emerald-500 border-emerald-400' : 'border-border hover:border-foreground'
-                        }`}
-                      >
-                        {isListo && <span className="text-white text-xs">✓</span>}
-                      </button>
-                      <span className={`text-sm ${isListo ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                        <span className="font-bold">{item.cantidad}×</span> {item.producto?.nombre}
+            return (
+              <div
+                key={pedido.id}
+                className={`rounded-xl border-2 p-4 flex flex-col gap-3 ${estadoColor[estado] ?? estadoColor.pendiente}`}
+              >
+                {/* Cabecera */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-foreground font-bold text-lg">
+                        {pedido.mesa
+                          ? `Mesa ${pedido.mesa.numero}`
+                          : pedido.tipo === 'llevar' ? 'Para llevar' : 'Delivery'}
                       </span>
-                      {item.notas && (
-                        <span className="text-yellow-600 dark:text-yellow-400 text-xs ml-auto shrink-0">
-                          📝 {item.notas}
-                        </span>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${estadoBadge[estado] ?? estadoBadge.pendiente}`}>
+                        {estado.charAt(0).toUpperCase() + estado.slice(1)}
+                      </span>
+                    </div>
+                    <p className={`text-xs mt-0.5 ${urgent ? 'text-red-600 dark:text-red-400 font-bold' : 'text-muted-foreground'}`}>
+                      {urgent ? '⚠️ ' : ''}{mins}min · {format(new Date(pedido.created_at), 'HH:mm', { locale: es })}
+                    </p>
+                  </div>
 
-              {estado !== 'listo' && (
-                <button
-                  onClick={() => avanzar.mutate(pedido.id)}
-                  disabled={avanzar.isPending}
-                  className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors ${
-                    estado === 'pendiente'
-                      ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                      : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                  }`}
-                >
-                  {estado === 'pendiente' ? 'Iniciar preparación' : 'Marcar listo'}
-                </button>
-              )}
-              {estado === 'listo' && (
-                <div className="text-center text-emerald-600 dark:text-emerald-400 text-sm font-semibold">
-                  ✓ Listo para entregar
+                  {/* Botón reimprimir */}
+                  <button
+                    onClick={() => imprimirComanda(pedido)}
+                    title="Reimprimir ticket"
+                    className="text-lg hover:scale-110 transition-transform shrink-0"
+                  >
+                    🖨️
+                  </button>
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+
+                {/* Ítems */}
+                <ul className="space-y-2">
+                  {pedido.items?.map((item) => {
+                    const isListo = item.estado === 'listo' || item.estado === 'entregado'
+                    return (
+                      <li key={item.id} className="flex items-center gap-2">
+                        <button
+                          onClick={() => avanzarItem.mutate({ itemId: item.id, estado: isListo ? 'pendiente' : 'listo' })}
+                          className={`w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${
+                            isListo ? 'bg-emerald-500 border-emerald-400' : 'border-border hover:border-foreground'
+                          }`}
+                        >
+                          {isListo && <span className="text-white text-xs">✓</span>}
+                        </button>
+                        <span className={`text-sm ${isListo ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                          <span className="font-bold">{item.cantidad}×</span> {item.producto?.nombre}
+                        </span>
+                        {item.notas && (
+                          <span className="text-yellow-600 dark:text-yellow-400 text-xs ml-auto shrink-0">
+                            📝 {item.notas}
+                          </span>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+
+                {/* Botón avanzar estado */}
+                {estado !== 'listo' ? (
+                  <button
+                    onClick={() => avanzar.mutate(pedido.id)}
+                    disabled={avanzar.isPending}
+                    className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      estado === 'pendiente'
+                        ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                    }`}
+                  >
+                    {estado === 'pendiente' ? 'Iniciar preparación' : 'Marcar listo'}
+                  </button>
+                ) : (
+                  <div className="text-center text-emerald-600 dark:text-emerald-400 text-sm font-semibold">
+                    ✓ Listo para entregar
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

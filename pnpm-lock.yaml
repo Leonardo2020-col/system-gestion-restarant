@@ -99,6 +99,9 @@ importers:
       '@types/react-dom':
         specifier: ^19
         version: 19.2.3(@types/react@19.2.14)
+      '@types/w3c-web-serial':
+        specifier: ^1.0.8
+        version: 1.0.8
       tailwindcss:
         specifier: ^4
         version: 4.3.0
@@ -1001,6 +1004,9 @@ packages:
 
   '@types/validate-npm-package-name@4.0.2':
     resolution: {integrity: sha512-lrpDziQipxCEeK5kWxvljWYhUvOiB2A9izZd9B2AFarYAkqZshb4lPbRs7zKEic6eGtH8V/2qJW+dPp9OtF6bw==}
+
+  '@types/w3c-web-serial@1.0.8':
+    resolution: {integrity: sha512-QQOT+bxQJhRGXoZDZGLs3ksLud1dMNnMiSQtBA0w8KXvLpXX4oM4TZb6J0GgJ8UbCaHo5s9/4VQT8uXy9JER2A==}
 
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
@@ -3299,6 +3305,8 @@ snapshots:
     optional: true
 
   '@types/validate-npm-package-name@4.0.2': {}
+
+  '@types/w3c-web-serial@1.0.8': {}
 
   accepts@2.0.0:
     dependencies:
