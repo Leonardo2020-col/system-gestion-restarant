@@ -121,101 +121,144 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
   function imprimirTicket() {
     if (!ticketData) return
 
-    /* ── Dimensiones según papel ── */
-    const is80 = paperSize === '80mm'
-    const pageW    = is80 ? '80mm' : '58mm'
-    const bodyW    = is80 ? '72mm' : '50mm'
-    const fontSize = is80 ? 14 : 12
-    const titlePx  = is80 ? 18 : 15
-    const namePx   = is80 ? 16 : 13
-    const qtyPx    = is80 ? 20 : 16
-    const notaPx   = is80 ? 13 : 11
+    // ── Canvas a 203 DPI (estándar térmico) ─────────────────────────────
+    // El driver recibe una imagen de exactamente los píxeles correctos,
+    // sin depender del tamaño de papel configurado en el navegador.
+    const is80    = paperSize === '80mm'
+    const PAGE_MM = is80 ? 80 : 58
+    const MAR_MM  = 3
+    const DPI     = 203
+    const mm      = (v: number) => Math.round(v * DPI / 25.4)
 
-    /* ── Altura calculada para que @page no deje espacio en blanco ──
-         Cada mm ≈ 3.78px a 96dpi.
-         Valores aproximados por bloque:                              */
-    const MM_HEADER  = 22          // título + subtítulo + separador
-    const MM_FOOTER  = 10          // fecha + separador
-    const MM_ITEM    = is80 ? 13 : 11   // línea de plato sin nota
-    const MM_NOTA    = is80 ?  7 :  6   // línea extra si tiene nota
-    const itemsH = ticketData.items.reduce(
-      (acc, it) => acc + MM_ITEM + (it.notas ? MM_NOTA : 0),
-      0
+    const pageWpx    = mm(PAGE_MM)
+    const contentWpx = mm(PAGE_MM - MAR_MM * 2)
+    const mPx        = mm(MAR_MM)
+
+    const F_TITLE = is80 ? 28 : 23
+    const F_SUB   = is80 ? 20 : 17
+    const F_QTY   = is80 ? 30 : 25
+    const F_NAME  = is80 ? 24 : 20
+    const F_NOTA  = is80 ? 19 : 16
+    const F_FOOT  = is80 ? 17 : 14
+    const LH      = (f: number) => Math.round(f * 1.4)
+    const GAP     = mm(1.5)
+
+    // Calcular altura total
+    let canvasH = mPx
+    canvasH += LH(F_TITLE) + GAP + LH(F_SUB) + mm(2) + mm(2)
+    ticketData.items.forEach((it) => {
+      canvasH += LH(F_NAME) + GAP
+      if (it.notas) canvasH += LH(F_NOTA) + GAP
+      canvasH += mm(1.5)
+    })
+    canvasH += mm(2) + LH(F_FOOT) + mPx
+
+    // Crear canvas
+    const canvas  = document.createElement('canvas')
+    canvas.width  = pageWpx
+    canvas.height = canvasH
+    const ctx     = canvas.getContext('2d')!
+
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, pageWpx, canvasH)
+    ctx.fillStyle = '#000000'
+
+    const left = mPx
+    let   cy   = mPx
+
+    const dashedLine = (y: number, color = '#000000', thick = 2) => {
+      ctx.save()
+      ctx.setLineDash([mm(2), mm(1.5)])
+      ctx.strokeStyle = color
+      ctx.lineWidth   = thick
+      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + contentWpx, y); ctx.stroke()
+      ctx.restore()
+    }
+
+    // Título
+    ctx.textAlign = 'center'
+    ctx.font = `bold ${F_TITLE}px "Courier New", monospace`
+    ctx.fillText(ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA', left + contentWpx / 2, cy + F_TITLE)
+    cy += LH(F_TITLE) + GAP
+
+    // Subtítulo
+    ctx.font = `${F_SUB}px "Courier New", monospace`
+    ctx.fillText(
+      (ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA') + '  ' + ticketData.hora,
+      left + contentWpx / 2, cy + F_SUB
     )
-    const pageH = MM_HEADER + itemsH + MM_FOOTER + 6  // +6mm de padding
+    cy += LH(F_SUB) + mm(2)
 
-    const itemsHtml = ticketData.items.map((item) => `
-      <div class="item">
-        <div class="row">
-          <span class="qty">${item.cantidad}x</span>
-          <span class="name">${item.nombre}</span>
-        </div>
-        ${item.notas ? `<div class="nota">! ${item.notas}</div>` : ''}
-      </div>`).join('')
+    dashedLine(cy, '#000000', 3)
+    cy += mm(3)
 
-    const win = window.open('', '_blank', 'width=320,height=400')
-    if (!win) return
+    // Ítems
+    ctx.textAlign = 'left'
+    ticketData.items.forEach((item) => {
+      ctx.fillStyle = '#000000'
+      ctx.font = `bold ${F_QTY}px "Courier New", monospace`
+      const qtyStr = item.cantidad + 'x'
+      const qtyW   = ctx.measureText(qtyStr).width + mm(2)
+      ctx.fillText(qtyStr, left, cy + F_QTY)
 
-    win.document.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <title>Comanda</title>
-  <style>
-    @page {
-      size: ${pageW} ${pageH}mm;
-      margin: 3mm 4mm;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      width: ${bodyW};
-      font-family: 'Courier New', Courier, monospace;
-      font-size: ${fontSize}px;
-      color: #000;
-    }
-    .header {
-      text-align: center;
-      border-bottom: 2px dashed #000;
-      padding-bottom: 5px;
-      margin-bottom: 5px;
-    }
-    .titulo  { font-size: ${titlePx}px; font-weight: bold; letter-spacing: 2px; }
-    .sub     { font-size: ${fontSize}px; margin-top: 2px; }
-    .item    { padding: 4px 0; border-bottom: 1px dashed #666; }
-    .row     { display: flex; align-items: baseline; gap: 3px; }
-    .qty     { font-size: ${qtyPx}px; font-weight: bold; min-width: 26px; }
-    .name    { font-size: ${namePx}px; font-weight: bold; flex: 1; }
-    .nota    {
-      display: inline-block;
-      margin: 3px 0 1px 4px;
-      font-size: ${notaPx}px;
-      font-weight: bold;
-      background: #000;
-      color: #fff;
-      padding: 1px 5px;
-    }
-    .footer  {
-      text-align: center;
-      font-size: ${fontSize - 2}px;
-      color: #444;
-      margin-top: 6px;
-      border-top: 1px dashed #000;
-      padding-top: 3px;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="titulo">${ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA'}</div>
-    <div class="sub">${ticketData.mesa ? `MESA ${ticketData.mesa}` : 'SIN MESA'} &mdash; ${ticketData.hora}</div>
-  </div>
-  ${itemsHtml}
-  <div class="footer">${new Date().toLocaleDateString('es-PE')}</div>
-</body>
-</html>`)
-    win.document.close()
-    win.focus()
-    setTimeout(() => { win.print(); win.close() }, 300)
+      ctx.font = `bold ${F_NAME}px "Courier New", monospace`
+      ctx.fillText(item.nombre, left + qtyW, cy + F_QTY - (F_QTY - F_NAME) / 2)
+      cy += LH(F_NAME) + GAP
+
+      if (item.notas) {
+        const txt   = '!  ' + item.notas
+        ctx.font    = `bold ${F_NOTA}px "Courier New", monospace`
+        const noteW = ctx.measureText(txt).width + mm(4)
+        const noteH = LH(F_NOTA)
+        ctx.fillStyle = '#000000'
+        ctx.fillRect(left + mm(2), cy, noteW, noteH)
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(txt, left + mm(4), cy + F_NOTA)
+        ctx.fillStyle = '#000000'
+        cy += noteH + GAP
+      }
+
+      dashedLine(cy, '#888888', 1.5)
+      cy += mm(2.5)
+    })
+
+    // Pie
+    cy += mm(1)
+    dashedLine(cy)
+    cy += mm(2)
+    ctx.textAlign = 'center'
+    ctx.font      = `${F_FOOT}px "Courier New", monospace`
+    ctx.fillStyle = '#444444'
+    ctx.fillText(new Date().toLocaleDateString('es-PE'), left + contentWpx / 2, cy + F_FOOT)
+
+    // Convertir a imagen e imprimir via iframe
+    const imgData = canvas.toDataURL('image/png')
+    const imgWmm  = PAGE_MM
+    const imgHmm  = Math.ceil(canvasH / DPI * 25.4) + 1
+
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;'
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentDocument
+    if (!doc) { document.body.removeChild(iframe); return }
+
+    doc.open()
+    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  @page { size: ${imgWmm}mm ${imgHmm}mm; margin: 0; }
+  * { margin: 0; padding: 0; }
+  body { background: #fff; }
+  img  { display: block; width: ${imgWmm}mm; height: ${imgHmm}mm; }
+</style></head>
+<body><img src="${imgData}"/></body></html>`)
+    doc.close()
+
+    iframe.contentWindow?.focus()
+    setTimeout(() => {
+      iframe.contentWindow?.print()
+      setTimeout(() => document.body.removeChild(iframe), 1500)
+    }, 400)
   }
 
   /* ── Enviar a cocina ── */
