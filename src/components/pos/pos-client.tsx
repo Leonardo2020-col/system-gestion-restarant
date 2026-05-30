@@ -121,28 +121,39 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
   function imprimirTicket() {
     if (!ticketData) return
 
-    /* Anchos según papel: 80mm → cuerpo 72mm | 58mm → cuerpo 50mm */
-    const bodyWidth  = paperSize === '80mm' ? '72mm' : '50mm'
-    const fontSize   = paperSize === '80mm' ? 14 : 12
-    const titleSize  = paperSize === '80mm' ? 18 : 15
-    const itemSize   = paperSize === '80mm' ? 16 : 13
-    const qtySize    = paperSize === '80mm' ? 20 : 16
-    const notaSize   = paperSize === '80mm' ? 13 : 11
+    /* ── Dimensiones según papel ── */
+    const is80 = paperSize === '80mm'
+    const pageW    = is80 ? '80mm' : '58mm'
+    const bodyW    = is80 ? '72mm' : '50mm'
+    const fontSize = is80 ? 14 : 12
+    const titlePx  = is80 ? 18 : 15
+    const namePx   = is80 ? 16 : 13
+    const qtyPx    = is80 ? 20 : 16
+    const notaPx   = is80 ? 13 : 11
+
+    /* ── Altura calculada para que @page no deje espacio en blanco ──
+         Cada mm ≈ 3.78px a 96dpi.
+         Valores aproximados por bloque:                              */
+    const MM_HEADER  = 22          // título + subtítulo + separador
+    const MM_FOOTER  = 10          // fecha + separador
+    const MM_ITEM    = is80 ? 13 : 11   // línea de plato sin nota
+    const MM_NOTA    = is80 ?  7 :  6   // línea extra si tiene nota
+    const itemsH = ticketData.items.reduce(
+      (acc, it) => acc + MM_ITEM + (it.notas ? MM_NOTA : 0),
+      0
+    )
+    const pageH = MM_HEADER + itemsH + MM_FOOTER + 6  // +6mm de padding
 
     const itemsHtml = ticketData.items.map((item) => `
       <div class="item">
-        <div class="item-header">
+        <div class="row">
           <span class="qty">${item.cantidad}x</span>
           <span class="name">${item.nombre}</span>
         </div>
-        ${item.notas ? `
-        <div class="nota">
-          <span class="nota-icon">!</span> ${item.notas}
-        </div>` : ''}
-      </div>
-    `).join('')
+        ${item.notas ? `<div class="nota">! ${item.notas}</div>` : ''}
+      </div>`).join('')
 
-    const win = window.open('', '_blank', 'width=320,height=500')
+    const win = window.open('', '_blank', 'width=320,height=400')
     if (!win) return
 
     win.document.write(`<!DOCTYPE html>
@@ -152,86 +163,59 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
   <title>Comanda</title>
   <style>
     @page {
-      size: ${paperSize} auto;
+      size: ${pageW} ${pageH}mm;
       margin: 3mm 4mm;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+    html, body {
+      width: ${bodyW};
       font-family: 'Courier New', Courier, monospace;
       font-size: ${fontSize}px;
-      width: ${bodyWidth};
       color: #000;
     }
     .header {
       text-align: center;
       border-bottom: 2px dashed #000;
-      padding-bottom: 6px;
-      margin-bottom: 6px;
+      padding-bottom: 5px;
+      margin-bottom: 5px;
     }
-    .titulo {
-      font-size: ${titleSize}px;
-      font-weight: bold;
-      letter-spacing: 2px;
-    }
-    .subtitulo {
-      font-size: ${fontSize}px;
-      margin-top: 3px;
-    }
-    .items { margin: 4px 0; }
-    .item {
-      padding: 6px 0;
-      border-bottom: 1px dashed #555;
-    }
-    .item-header { display: flex; align-items: baseline; gap: 4px; }
-    .qty {
-      font-size: ${qtySize}px;
-      font-weight: bold;
-      min-width: 28px;
-    }
-    .name {
-      font-size: ${itemSize}px;
-      font-weight: bold;
-      flex: 1;
-    }
-    .nota {
-      margin-top: 4px;
-      margin-left: 6px;
-      font-size: ${notaSize}px;
+    .titulo  { font-size: ${titlePx}px; font-weight: bold; letter-spacing: 2px; }
+    .sub     { font-size: ${fontSize}px; margin-top: 2px; }
+    .item    { padding: 4px 0; border-bottom: 1px dashed #666; }
+    .row     { display: flex; align-items: baseline; gap: 3px; }
+    .qty     { font-size: ${qtyPx}px; font-weight: bold; min-width: 26px; }
+    .name    { font-size: ${namePx}px; font-weight: bold; flex: 1; }
+    .nota    {
+      display: inline-block;
+      margin: 3px 0 1px 4px;
+      font-size: ${notaPx}px;
       font-weight: bold;
       background: #000;
       color: #fff;
-      padding: 2px 6px;
-      border-radius: 2px;
-      display: inline-block;
+      padding: 1px 5px;
     }
-    .nota-icon {
-      font-weight: bold;
-      margin-right: 4px;
-    }
-    .footer {
+    .footer  {
       text-align: center;
       font-size: ${fontSize - 2}px;
-      color: #555;
-      margin-top: 8px;
+      color: #444;
+      margin-top: 6px;
       border-top: 1px dashed #000;
-      padding-top: 4px;
+      padding-top: 3px;
     }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="titulo">${ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA'}</div>
-    <div class="subtitulo">
-      ${ticketData.mesa ? `MESA ${ticketData.mesa}` : 'SIN MESA'} &mdash; ${ticketData.hora}
-    </div>
+    <div class="sub">${ticketData.mesa ? `MESA ${ticketData.mesa}` : 'SIN MESA'} &mdash; ${ticketData.hora}</div>
   </div>
-  <div class="items">${itemsHtml}</div>
+  ${itemsHtml}
   <div class="footer">${new Date().toLocaleDateString('es-PE')}</div>
 </body>
 </html>`)
     win.document.close()
     win.focus()
-    setTimeout(() => { win.print(); win.close() }, 250)
+    setTimeout(() => { win.print(); win.close() }, 300)
   }
 
   /* ── Enviar a cocina ── */
