@@ -134,14 +134,16 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
     const contentWpx = mm(PAGE_MM - MAR_MM * 2)
     const mPx        = mm(MAR_MM)
 
-    const F_TITLE = is80 ? 28 : 23
-    const F_SUB   = is80 ? 20 : 17
-    const F_QTY   = is80 ? 30 : 25
-    const F_NAME  = is80 ? 24 : 20
-    const F_NOTA  = is80 ? 19 : 16
-    const F_FOOT  = is80 ? 17 : 14
+    /* Fuentes calibradas para que el texto quepa en el ancho real
+       58mm útil ≈ 415px / 80mm útil ≈ 592px                       */
+    const F_TITLE = is80 ? 22 : 18
+    const F_SUB   = is80 ? 16 : 13
+    const F_QTY   = is80 ? 22 : 18
+    const F_NAME  = is80 ? 18 : 15
+    const F_NOTA  = is80 ? 15 : 13
+    const F_FOOT  = is80 ? 13 : 11
     const LH      = (f: number) => Math.round(f * 1.4)
-    const GAP     = mm(1.5)
+    const GAP     = mm(1)
 
     // Calcular altura total
     let canvasH = mPx
@@ -233,8 +235,8 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
 
     // Convertir a imagen e imprimir via iframe
     const imgData = canvas.toDataURL('image/png')
-    const imgWmm  = PAGE_MM
-    const imgHmm  = Math.ceil(canvasH / DPI * 25.4) + 1
+    // Altura exacta en mm según el canvas (sin redondeo extra)
+    const pageHmm = (canvasH / DPI * 25.4).toFixed(2)
 
     const iframe = document.createElement('iframe')
     iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;'
@@ -246,10 +248,10 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
     doc.open()
     doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
-  @page { size: ${imgWmm}mm ${imgHmm}mm; margin: 0; }
+  @page { size: ${PAGE_MM}mm ${pageHmm}mm; margin: 0; }
   * { margin: 0; padding: 0; }
-  body { background: #fff; }
-  img  { display: block; width: ${imgWmm}mm; height: ${imgHmm}mm; }
+  body { background: #fff; width: ${PAGE_MM}mm; }
+  img  { display: block; width: 100%; height: auto; }
 </style></head>
 <body><img src="${imgData}"/></body></html>`)
     doc.close()
