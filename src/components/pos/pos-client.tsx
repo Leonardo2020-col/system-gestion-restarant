@@ -1,7 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
 import { buildEscPos, toBase64 } from '@/lib/escpos'
-import jsPDF from 'jspdf'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -165,76 +164,60 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
       /* QZ Tray no disponible → usar PDF como fallback */
     }
 
-    /* ── Fallback: PDF con jsPDF ─────────────────────────────────────────
-       Genera un PDF de 58×H mm. Al abrirlo en Adobe Reader o Edge,
-       imprime correctamente en papel térmico.                            */
-    const is80 = paperSize === '80mm'
-    const W = is80 ? 80 : 58
-    const MAR = 3
-    const CW = W - MAR * 2
-    const FT = is80 ? 10 : 9
-    const FS = is80 ? 8 : 7
-    const FN = is80 ? 9 : 8
-    const FA = is80 ? 7 : 6
-    const lh = (pt: number) => pt * 0.353 * 1.5
+    /* ── Fallback: window.print() — abre el diálogo de impresión del sistema */
+    const w = paperSize === '80mm' ? '80mm' : '58mm'
+    const itemsHtml = ticketData.items.map((item) => `
+      <div class="item">
+        <div class="item-name"><span class="qty">${item.cantidad}x</span> ${item.nombre}</div>
+        ${item.notas ? `<div class="nota">! ${item.notas}</div>` : ''}
+        <div class="sep"></div>
+      </div>`).join('')
 
-    let H = MAR
-    H += lh(FT) + 0.5
-    H += lh(FS) + 1
-    H += 2
-    ticketData.items.forEach((it) => {
-      H += lh(FN) + 1
-      if (it.notas) H += lh(FA) + 1
-      H += 1
-    })
-    H += 2 + lh(FS) + MAR
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Comanda</title>
+<style>
+  @page { size: ${w} auto; margin: 4mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Courier New', monospace; font-size: 11pt; width: ${w}; margin: 0; color: #000; background: #fff; }
+  .title { text-align: center; font-size: 15pt; font-weight: bold; letter-spacing: 2px; margin-bottom: 2mm; }
+  .subtitle { text-align: center; font-weight: bold; margin-bottom: 2mm; }
+  .line { border-top: 1px solid #000; margin: 2mm 0; }
+  .dline { border-top: 2px solid #000; margin: 2mm 0; }
+  .item { margin-bottom: 1mm; }
+  .item-name { font-size: 12pt; font-weight: bold; }
+  .qty { display: inline-block; width: 7mm; }
+  .nota { display: inline-block; background: #000; color: #fff; font-weight: bold; font-size: 9pt; padding: 0 2mm; margin: 1mm 0; }
+  .sep { border-top: 1px dashed #666; margin-top: 2mm; }
+  .footer { text-align: center; font-size: 8pt; color: #555; margin-top: 2mm; }
+</style>
+</head>
+<body>
+  <div class="title">${ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA'}</div>
+  <div class="subtitle">${ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA'} &mdash; ${ticketData.hora}</div>
+  <div class="dline"></div>
+  ${itemsHtml}
+  <div class="line"></div>
+  <div class="footer">${new Date().toLocaleDateString('es-PE')}</div>
+</body>
+</html>`
 
-    const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
-    let y = MAR
-
-    doc.setFont('courier', 'bold')
-    doc.setFontSize(FT)
-    doc.text(ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA', W / 2, y + lh(FT), { align: 'center' })
-    y += lh(FT) + 0.5
-
-    doc.setFont('courier', 'normal')
-    doc.setFontSize(FS)
-    doc.text(`${ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA'}  ${ticketData.hora}`, W / 2, y + lh(FS), { align: 'center' })
-    y += lh(FS) + 1
-
-    doc.setDrawColor(0); doc.setLineWidth(0.4)
-    doc.line(MAR, y, W - MAR, y); y += 2
-
-    ticketData.items.forEach((item) => {
-      doc.setFont('courier', 'bold'); doc.setFontSize(FN)
-      const lines = doc.splitTextToSize(`${item.cantidad}x  ${item.nombre}`, CW)
-      doc.text(lines, MAR, y + lh(FN))
-      y += lh(FN) * lines.length + 0.5
-
-      if (item.notas) {
-        doc.setFontSize(FA)
-        const nw = Math.min(doc.getTextWidth(`! ${item.notas}`) + 3, CW)
-        const nh = lh(FA) + 0.5
-        doc.setFillColor(0, 0, 0)
-        doc.rect(MAR, y, nw, nh, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.text(`! ${item.notas}`, MAR + 1.5, y + lh(FA))
-        doc.setTextColor(0, 0, 0)
-        y += nh + 0.5
-      }
-
-      doc.setLineDashPattern([0.8, 0.8], 0); doc.setDrawColor(120); doc.setLineWidth(0.2)
-      doc.line(MAR, y, W - MAR, y)
-      doc.setLineDashPattern([], 0); doc.setDrawColor(0); y += 1.5
-    })
-
-    y += 0.5; doc.setLineWidth(0.3); doc.line(MAR, y, W - MAR, y); y += 1.5
-    doc.setFontSize(FS - 1); doc.setFont('courier', 'normal'); doc.setTextColor(80)
-    doc.text(new Date().toLocaleDateString('es-PE'), W / 2, y + lh(FS - 1), { align: 'center' })
-
-    /* Descargar el PDF — el usuario lo abre en su visor y lo imprime */
-    doc.save(`comanda${ticketData.mesa ? '-mesa-' + ticketData.mesa : ''}.pdf`)
-    toast.info('📄 PDF descargado. Ábrelo e imprime desde Adobe Reader o Edge para resultado correcto.', { duration: 6000 })
+    const win = window.open('', '_blank', 'width=400,height=600')
+    if (!win) {
+      toast.error('El navegador bloqueó la ventana de impresión. Permite ventanas emergentes para este sitio.')
+      return
+    }
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    /* Pequeño delay para que el navegador termine de renderizar */
+    setTimeout(() => {
+      win.print()
+      win.close()
+    }, 250)
+    setTicketOpen(false)
   }
 
   /* ── Enviar a cocina ── */
