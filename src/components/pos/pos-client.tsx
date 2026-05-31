@@ -138,7 +138,11 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
         setTicketOpen(false)
         return
       }
-    } catch {
+      /* Mostrar error real de la API para poder diagnosticar */
+      const errBody = await res.json().catch(() => ({}))
+      console.warn('[imprimir-ticket API]', res.status, errBody)
+    } catch (e) {
+      console.warn('[imprimir-ticket API] fetch error:', e)
       /* API no disponible → intentar QZ Tray */
     }
 
@@ -164,12 +168,17 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
       /* QZ Tray no disponible → usar PDF como fallback */
     }
 
-    /* ── Fallback: window.print() — abre el diálogo de impresión del sistema
-       No forzamos tamaño de página: el driver de la impresora ya sabe el
-       ancho del papel térmico. Solo damos formato al contenido.           */
+    /* ── Fallback: iframe oculto + print()
+       Usamos iframe en lugar de popup para evitar errores de extensiones.
+       Calculamos la altura real del ticket para que @page sea exacto y
+       Chrome no muestre una página infinitamente larga.                  */
+    const PW = paperSize === '80mm' ? 80 : 58   // mm ancho papel
+    // Estimación de altura: cabecera ~18mm + 12mm por item + pie ~10mm
+    const PH = 18 + ticketData.items.reduce((acc, it) => acc + (it.notas ? 18 : 12), 0) + 10
+
     const itemsHtml = ticketData.items.map((item) => `
       <div class="item">
-        <div class="item-name"><span class="qty">${item.cantidad}x</span>${item.nombre}</div>
+        <div class="item-name"><span class="qty">${item.cantidad}x</span> ${item.nombre}</div>
         ${item.notas ? `<div class="nota">! ${item.notas}</div>` : ''}
         <hr class="sep">
       </div>`).join('')
@@ -180,45 +189,46 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
 <meta charset="utf-8">
 <title>Comanda</title>
 <style>
-  @page { margin: 3mm; }
+  @page {
+    size: ${PW}mm ${PH}mm;
+    margin: 3mm;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Courier New', Courier, monospace;
-    font-size: 10pt;
+    font-size: 9pt;
     color: #000;
     background: #fff;
-    padding: 2mm;
   }
   .title {
     text-align: center;
-    font-size: 14pt;
+    font-size: 13pt;
     font-weight: bold;
     letter-spacing: 2px;
-    text-transform: uppercase;
     margin-bottom: 1mm;
   }
   .subtitle {
     text-align: center;
-    font-size: 9pt;
+    font-size: 8pt;
     font-weight: bold;
     margin-bottom: 2mm;
   }
-  hr { border: none; border-top: 1px solid #000; margin: 2mm 0; }
-  hr.dbl { border-top: 2px solid #000; }
-  hr.sep { border-top: 1px dashed #999; margin: 1.5mm 0; }
+  hr { border: none; border-top: 1px solid #000; margin: 1.5mm 0; }
+  hr.dbl { border-top: 2px solid #000; margin-bottom: 2mm; }
+  hr.sep { border-top: 1px dashed #999; margin: 1mm 0; }
   .item { margin-bottom: 0.5mm; }
-  .item-name { font-size: 11pt; font-weight: bold; }
-  .qty { display: inline-block; min-width: 6mm; }
+  .item-name { font-size: 10pt; font-weight: bold; line-height: 1.3; }
+  .qty { display: inline-block; min-width: 5mm; }
   .nota {
     display: inline-block;
     background: #000;
     color: #fff;
-    font-size: 8pt;
+    font-size: 7pt;
     font-weight: bold;
-    padding: 0 2mm;
-    margin: 1mm 0;
+    padding: 0 1.5mm;
+    margin: 0.5mm 0;
   }
-  .footer { text-align: center; font-size: 7pt; color: #666; margin-top: 1mm; }
+  .footer { text-align: center; font-size: 7pt; color: #555; margin-top: 1.5mm; }
 </style>
 </head>
 <body>
@@ -231,18 +241,30 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
 </body>
 </html>`
 
-    const win = window.open('', '_blank', 'width=360,height=500')
-    if (!win) {
-      toast.error('El navegador bloqueó la ventana emergente. Permite ventanas emergentes para este sitio.')
+    /* Crear iframe invisible — no abre popup, no tiene errores de extensiones */
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;'
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentDocument ?? iframe.contentWindow?.document
+    if (!doc) {
+      document.body.removeChild(iframe)
+      toast.error('No se pudo preparar el documento de impresión.')
       return
     }
-    win.document.write(html)
-    win.document.close()
-    win.focus()
+
+    doc.open()
+    doc.write(html)
+    doc.close()
+
+    /* Esperar que el iframe renderice antes de lanzar el diálogo */
     setTimeout(() => {
-      win.print()
-      win.close()
+      iframe.contentWindow?.focus()
+      iframe.contentWindow?.print()
+      /* Remover el iframe después de que el diálogo cierre */
+      setTimeout(() => document.body.removeChild(iframe), 1000)
     }, 300)
+
     setTicketOpen(false)
   }
 
