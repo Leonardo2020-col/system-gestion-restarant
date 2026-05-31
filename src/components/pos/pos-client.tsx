@@ -164,13 +164,14 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
       /* QZ Tray no disponible → usar PDF como fallback */
     }
 
-    /* ── Fallback: window.print() — abre el diálogo de impresión del sistema */
-    const w = paperSize === '80mm' ? '80mm' : '58mm'
+    /* ── Fallback: window.print() — abre el diálogo de impresión del sistema
+       No forzamos tamaño de página: el driver de la impresora ya sabe el
+       ancho del papel térmico. Solo damos formato al contenido.           */
     const itemsHtml = ticketData.items.map((item) => `
       <div class="item">
-        <div class="item-name"><span class="qty">${item.cantidad}x</span> ${item.nombre}</div>
+        <div class="item-name"><span class="qty">${item.cantidad}x</span>${item.nombre}</div>
         ${item.notas ? `<div class="nota">! ${item.notas}</div>` : ''}
-        <div class="sep"></div>
+        <hr class="sep">
       </div>`).join('')
 
     const html = `<!DOCTYPE html>
@@ -179,44 +180,69 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
 <meta charset="utf-8">
 <title>Comanda</title>
 <style>
-  @page { size: ${w} auto; margin: 4mm; }
-  * { box-sizing: border-box; }
-  body { font-family: 'Courier New', monospace; font-size: 11pt; width: ${w}; margin: 0; color: #000; background: #fff; }
-  .title { text-align: center; font-size: 15pt; font-weight: bold; letter-spacing: 2px; margin-bottom: 2mm; }
-  .subtitle { text-align: center; font-weight: bold; margin-bottom: 2mm; }
-  .line { border-top: 1px solid #000; margin: 2mm 0; }
-  .dline { border-top: 2px solid #000; margin: 2mm 0; }
-  .item { margin-bottom: 1mm; }
-  .item-name { font-size: 12pt; font-weight: bold; }
-  .qty { display: inline-block; width: 7mm; }
-  .nota { display: inline-block; background: #000; color: #fff; font-weight: bold; font-size: 9pt; padding: 0 2mm; margin: 1mm 0; }
-  .sep { border-top: 1px dashed #666; margin-top: 2mm; }
-  .footer { text-align: center; font-size: 8pt; color: #555; margin-top: 2mm; }
+  @page { margin: 3mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10pt;
+    color: #000;
+    background: #fff;
+    padding: 2mm;
+  }
+  .title {
+    text-align: center;
+    font-size: 14pt;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 1mm;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 9pt;
+    font-weight: bold;
+    margin-bottom: 2mm;
+  }
+  hr { border: none; border-top: 1px solid #000; margin: 2mm 0; }
+  hr.dbl { border-top: 2px solid #000; }
+  hr.sep { border-top: 1px dashed #999; margin: 1.5mm 0; }
+  .item { margin-bottom: 0.5mm; }
+  .item-name { font-size: 11pt; font-weight: bold; }
+  .qty { display: inline-block; min-width: 6mm; }
+  .nota {
+    display: inline-block;
+    background: #000;
+    color: #fff;
+    font-size: 8pt;
+    font-weight: bold;
+    padding: 0 2mm;
+    margin: 1mm 0;
+  }
+  .footer { text-align: center; font-size: 7pt; color: #666; margin-top: 1mm; }
 </style>
 </head>
 <body>
   <div class="title">${ticketData.esAgregado ? '++ ADICIONAL' : 'COMANDA'}</div>
   <div class="subtitle">${ticketData.mesa ? 'MESA ' + ticketData.mesa : 'SIN MESA'} &mdash; ${ticketData.hora}</div>
-  <div class="dline"></div>
+  <hr class="dbl">
   ${itemsHtml}
-  <div class="line"></div>
+  <hr>
   <div class="footer">${new Date().toLocaleDateString('es-PE')}</div>
 </body>
 </html>`
 
-    const win = window.open('', '_blank', 'width=400,height=600')
+    const win = window.open('', '_blank', 'width=360,height=500')
     if (!win) {
-      toast.error('El navegador bloqueó la ventana de impresión. Permite ventanas emergentes para este sitio.')
+      toast.error('El navegador bloqueó la ventana emergente. Permite ventanas emergentes para este sitio.')
       return
     }
     win.document.write(html)
     win.document.close()
     win.focus()
-    /* Pequeño delay para que el navegador termine de renderizar */
     setTimeout(() => {
       win.print()
       win.close()
-    }, 250)
+    }, 300)
     setTicketOpen(false)
   }
 
