@@ -123,9 +123,29 @@ export function PosClient({ mesas: initMesas, salones, categorias, productos, te
   async function imprimirTicket() {
     if (!ticketData) return
 
+    /* ── Intento 1: API local /api/imprimir-ticket (Windows ESC/POS directo) */
+    try {
+      const res = await fetch('/api/imprimir-ticket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...ticketData,
+          paperSize,
+          printerName: paperSize === '80mm' ? 'POS-80' : 'POS-58',
+        }),
+      })
+      if (res.ok) {
+        toast.success('✓ Ticket enviado a la impresora')
+        setTicketOpen(false)
+        return
+      }
+    } catch {
+      /* API no disponible → intentar QZ Tray */
+    }
+
     const escBytes = buildEscPos({ ...ticketData, paperSize })
 
-    /* ── Intento 1: QZ Tray (impresión directa sin diálogo) ─────────────
+    /* ── Intento 2: QZ Tray (impresión directa sin diálogo) ─────────────
        Requiere QZ Tray instalado en la PC: https://qz.io/download/      */
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
